@@ -14,6 +14,8 @@ const MOVE_SOUND := preload("res://audio/sfx/player_move.wav")
 @export var hold_repeat_delay: float = 0.22
 @export var hold_repeat_interval: float = 0.11
 @export var start_lane_angle: float = -PI * 0.5
+@export var damage_shake_time: float = 0.18
+@export var damage_shake_strength: float = 0.42
 
 var _storm: StormTube
 var _player: StormPlayer
@@ -26,6 +28,9 @@ var _held_lane_direction: int = 0
 var _hold_repeat_timer: float = 0.0
 var _input_enabled: bool = true
 var _move_audio: AudioStreamPlayer
+var _shake_timer: float = 0.0
+var _shake_duration: float = 0.0
+var _shake_strength: float = 0.0
 
 func _ready() -> void:
 	_storm = get_node(storm_path) as StormTube
@@ -42,7 +47,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if not _input_enabled:
-		_update_route_pose()
+		_update_route_pose(delta)
 		return
 	if Input.is_key_pressed(KEY_UP):
 		_speed = min(_speed + 18.0 * delta, max_speed)
@@ -51,16 +56,24 @@ func _process(delta: float) -> void:
 	_update_lane_input(delta)
 	_lane_angle = lerp_angle(_lane_angle, _target_lane_angle, clampf(lane_ease_speed * delta, 0.0, 1.0))
 	_distance = min(_distance + _speed * delta, _storm.route_length)
-	_update_route_pose()
+	_update_route_pose(delta)
 
 func restart_run() -> void:
 	_distance = 0.0
 	_lane_index = 0
 	_target_lane_angle = _lane_angle_for_index(_lane_index)
 	_lane_angle = _target_lane_angle
+	_shake_timer = 0.0
 
 func set_input_enabled(enabled: bool) -> void:
 	_input_enabled = enabled
+
+func play_damage_feedback(_invulnerable_time: float) -> void:
+	_shake_timer = damage_shake_time
+	_shake_duration = damage_shake_time
+	_shake_strength = damage_shake_strength
+	if _player.has_method("play_damage_feedback"):
+		_player.play_damage_feedback(_invulnerable_time)
 
 func distance() -> float:
 	return _distance
@@ -74,7 +87,7 @@ func lane_angle_for_index(index: int) -> float:
 func speed() -> float:
 	return _speed
 
-func _update_route_pose() -> void:
+func _update_route_pose(delta: float) -> void:
 	var here: StormTube.RouteSample = _storm.sample_at_distance(_distance)
 	var ahead: StormTube.RouteSample = _storm.sample_at_distance(_distance + 14.0)
 	var behind: StormTube.RouteSample = _storm.sample_at_distance(maxf(_distance - camera_distance, 0.0))
@@ -83,6 +96,12 @@ func _update_route_pose() -> void:
 
 	_player.set_route_pose(here, _lane_angle, _storm.radius)
 	global_position = behind.position + camera_radial * (_storm.radius * 0.58) + here.up * camera_lift
+	if _shake_timer > 0.0:
+		var shake_fade: float = _shake_timer / maxf(_shake_duration, 0.001)
+		var shake_amount: float = _shake_strength * shake_fade
+		global_position += here.right * randf_range(-shake_amount, shake_amount)
+		global_position += here.up * randf_range(-shake_amount, shake_amount)
+		_shake_timer = maxf(_shake_timer - delta, 0.0)
 	look_at(_player.global_position.lerp(ahead.position, 0.35), here.up)
 
 func _update_lane_input(delta: float) -> void:

@@ -44,6 +44,7 @@ const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
 @export var pulsar_fire_interval: float = 2.0
 @export var pulsar_bolt_speed: float = 95.0
 @export var exploder_fuse_time: float = 0.7
+@export var damage_invulnerability_time: float = 0.85
 
 var _storm: StormTube
 var _runner: Node
@@ -66,6 +67,7 @@ var _drums_high_passes: Array[AudioStream] = []
 var _pass_index: int = 0
 var _loaded_music_stage: int = 0
 var _music_intensity: float = 0.0
+var _damage_invulnerability_timer: float = 0.0
 
 class StageHazard:
 	var spawn_distance: float
@@ -124,6 +126,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_update_music_intensity(delta)
+	_damage_invulnerability_timer = maxf(_damage_invulnerability_timer - delta, 0.0)
 
 	if Input.is_key_pressed(KEY_R):
 		restart_stage()
@@ -165,7 +168,7 @@ func _process(delta: float) -> void:
 			if hazard.cleared:
 				continue
 			_update_marker_pose(hazard)
-		if absf(relative) <= hit_window and hazard.lane == player_lane:
+		if absf(relative) <= hit_window and hazard.lane == player_lane and _can_damage_player():
 			_hit_player(hazard)
 
 	if player_distance >= _stage_end_distance():
@@ -179,6 +182,7 @@ func restart_stage() -> void:
 	_stage = 1
 	_game_over = false
 	_fire_timer = 0.0
+	_damage_invulnerability_timer = 0.0
 	_runner.set_input_enabled(true)
 	_runner.restart_run()
 	_clear_markers()
@@ -297,6 +301,7 @@ func _stage_end_distance() -> float:
 
 func _advance_stage() -> void:
 	_play_sfx(CLEAR_SOUND)
+	_damage_invulnerability_timer = 0.0
 	_clear_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
@@ -365,7 +370,7 @@ func _fire() -> void:
 	bullet.marker = _build_bullet_marker()
 	_storm.add_child(bullet.marker)
 	_bullets.append(bullet)
-	_play_sfx(FIRE_SOUND)
+	_play_sfx(FIRE_SOUND, -7.0)
 
 func _update_bullets(delta: float) -> void:
 	for i in range(_bullets.size() - 1, -1, -1):
@@ -404,9 +409,9 @@ func _destroy_hazard(hazard: StageHazard) -> void:
 	if hazard.kind == "tanker":
 		_spawn_hazard(hazard.distance + 8.0, hazard.lane - 1, "flipper")
 		_spawn_hazard(hazard.distance + 8.0, hazard.lane + 1, "flipper")
-		_play_sfx(KILL_SOUND)
+		_play_sfx(KILL_SOUND, -3.5)
 		return
-	_play_sfx(EXPLODER_SOUND if hazard.kind == "exploder" else KILL_SOUND)
+	_play_sfx(EXPLODER_SOUND if hazard.kind == "exploder" else KILL_SOUND, -4.0)
 
 func _build_bullet_marker() -> Node3D:
 	var marker: Node3D = Node3D.new()
@@ -569,6 +574,8 @@ func _stack_offset(index: int) -> float:
 	return side * ceil(float(index) / 2.0) * 0.62
 
 func _check_rim_obstacle_collision(player_lane: int) -> void:
+	if not _can_damage_player():
+		return
 	for i in range(_rim_obstacles.size() - 1, -1, -1):
 		var obstacle: RimObstacle = _rim_obstacles[i]
 		if obstacle.lane != player_lane:
@@ -579,12 +586,23 @@ func _check_rim_obstacle_collision(player_lane: int) -> void:
 		return
 
 func _damage_player(sound: AudioStream) -> void:
-	if _game_over:
+	if not _can_damage_player():
 		return
 	lives = maxi(lives - 1, 0)
-	_play_sfx(sound)
+	_damage_invulnerability_timer = damage_invulnerability_time
+	if _runner.has_method("play_damage_feedback"):
+		_runner.play_damage_feedback(damage_invulnerability_time)
+	_play_sfx(sound, _damage_sound_volume(sound))
 	if lives == 0:
 		_trigger_game_over()
+
+func _can_damage_player() -> bool:
+	return not _game_over and _damage_invulnerability_timer <= 0.0
+
+func _damage_sound_volume(sound: AudioStream) -> float:
+	if sound == EXPLODER_SOUND:
+		return -5.0
+	return -7.0
 
 func _trigger_game_over() -> void:
 	if _game_over:
@@ -595,13 +613,13 @@ func _trigger_game_over() -> void:
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
-	_play_sfx(GAME_OVER_SOUND)
+	_play_sfx(GAME_OVER_SOUND, -2.0)
 
 func _burst_rim_obstacles() -> void:
 	for obstacle in _rim_obstacles:
 		_spawn_burst(obstacle.marker.global_position)
 	if not _rim_obstacles.is_empty():
-		_play_sfx(EXPLODER_SOUND)
+		_play_sfx(EXPLODER_SOUND, -5.0)
 
 func _spawn_burst(position: Vector3) -> void:
 	var burst: Node3D = Node3D.new()
@@ -780,8 +798,9 @@ func _update_music_intensity(delta: float) -> void:
 	_drums_high_player.volume_db = linear_to_db(clampf(_music_intensity, 0.001, 1.0))
 	_drums_low_player.volume_db = linear_to_db(clampf(1.0 - _music_intensity, 0.001, 1.0))
 
-func _play_sfx(stream: AudioStream) -> void:
+func _play_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
 	_sfx_player.stream = stream
+	_sfx_player.volume_db = volume_db
 	_sfx_player.play()
 
 func _ensure_audio_bus(bus_name: String) -> void:

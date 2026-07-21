@@ -2,14 +2,27 @@ extends Node3D
 class_name StormPlayer
 
 @export var wall_offset: float = 0.82
+@export var damage_flash_time: float = 0.14
 
 var _hull: MeshInstance3D
 var _left_edge: MeshInstance3D
 var _right_edge: MeshInstance3D
 var _core: MeshInstance3D
+var _hull_material: StandardMaterial3D
+var _left_edge_material: StandardMaterial3D
+var _right_edge_material: StandardMaterial3D
+var _core_material: StandardMaterial3D
+var _flash_material: StandardMaterial3D
+var _damage_flash_timer: float = 0.0
+var _invulnerable_visual_timer: float = 0.0
 
 func _ready() -> void:
 	_build_model()
+
+func _process(delta: float) -> void:
+	_damage_flash_timer = maxf(_damage_flash_timer - delta, 0.0)
+	_invulnerable_visual_timer = maxf(_invulnerable_visual_timer - delta, 0.0)
+	_update_damage_visuals()
 
 func set_route_pose(sample: StormTube.RouteSample, lane_angle: float, tube_radius: float) -> void:
 	var radial: Vector3 = sample.right * cos(lane_angle) + sample.up * sin(lane_angle)
@@ -19,10 +32,18 @@ func set_route_pose(sample: StormTube.RouteSample, lane_angle: float, tube_radiu
 	global_position = sample.position + radial * (tube_radius * wall_offset)
 	global_basis = Basis(side, radial, -forward).orthonormalized()
 
+func play_damage_feedback(invulnerable_time: float) -> void:
+	_damage_flash_timer = damage_flash_time
+	_invulnerable_visual_timer = maxf(_invulnerable_visual_timer, invulnerable_time)
+	_update_damage_visuals()
+
 func _build_model() -> void:
+	_flash_material = _material(Color(0.85, 1.0, 1.0), Color(0.3, 1.0, 1.0), 4.8)
+
 	_hull = MeshInstance3D.new()
 	_hull.mesh = _build_claw_hull_mesh()
-	_hull.material_override = _material(Color(0.02, 0.28, 0.20), Color(0.08, 0.75, 0.45), 1.1)
+	_hull_material = _material(Color(0.02, 0.28, 0.20), Color(0.08, 0.75, 0.45), 1.1)
+	_hull.material_override = _hull_material
 	add_child(_hull)
 
 	_left_edge = _edge_strip(Vector3(-0.74, 0.16, 0.88), Vector3(-0.18, 0.22, -1.28))
@@ -37,7 +58,8 @@ func _build_model() -> void:
 	core_mesh.height = 0.36
 	_core.mesh = core_mesh
 	_core.position = Vector3(0.0, 0.27, -0.35)
-	_core.material_override = _material(Color(0.72, 1.0, 0.18), Color(0.55, 1.0, 0.08), 2.8)
+	_core_material = _material(Color(0.72, 1.0, 0.18), Color(0.55, 1.0, 0.08), 2.8)
+	_core.material_override = _core_material
 	add_child(_core)
 
 func _build_claw_hull_mesh() -> ArrayMesh:
@@ -80,7 +102,12 @@ func _edge_strip(a: Vector3, b: Vector3) -> MeshInstance3D:
 		side = Vector3.RIGHT
 	var up: Vector3 = forward.cross(side).normalized()
 	strip.basis = Basis(side, up, forward).orthonormalized()
-	strip.material_override = _material(Color(0.45, 1.0, 0.72), Color(0.18, 1.0, 0.62), 3.0)
+	var edge_material: StandardMaterial3D = _material(Color(0.45, 1.0, 0.72), Color(0.18, 1.0, 0.62), 3.0)
+	strip.material_override = edge_material
+	if _left_edge_material == null:
+		_left_edge_material = edge_material
+	else:
+		_right_edge_material = edge_material
 	return strip
 
 func _add_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
@@ -101,3 +128,17 @@ func _material(albedo: Color, emission: Color, energy: float) -> StandardMateria
 	material.emission = emission
 	material.emission_energy_multiplier = energy
 	return material
+
+func _update_damage_visuals() -> void:
+	if _hull == null:
+		return
+	var flashing: bool = _damage_flash_timer > 0.0
+	_hull.material_override = _flash_material if flashing else _hull_material
+	_left_edge.material_override = _flash_material if flashing else _left_edge_material
+	_right_edge.material_override = _flash_material if flashing else _right_edge_material
+	_core.material_override = _flash_material if flashing else _core_material
+
+	if _invulnerable_visual_timer <= 0.0:
+		visible = true
+		return
+	visible = fmod(_invulnerable_visual_timer, 0.12) > 0.035
