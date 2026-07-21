@@ -61,6 +61,7 @@ var _sfx_player: AudioStreamPlayer
 var _score: int = 0
 var _stage: int = 1
 var _game_over: bool = false
+var _game_complete: bool = false
 var _fire_timer: float = 0.0
 var _base_passes: Array[AudioStream] = []
 var _drums_high_passes: Array[AudioStream] = []
@@ -68,6 +69,13 @@ var _pass_index: int = 0
 var _loaded_music_stage: int = 0
 var _music_intensity: float = 0.0
 var _damage_invulnerability_timer: float = 0.0
+var _run_active: bool = false
+var _state_layer: CanvasLayer
+var _state_panel: Control
+var _state_title: Label
+var _state_body: Label
+var _state_primary_button: Button
+var _state_secondary_button: Button
 
 class StageHazard:
 	var spawn_distance: float
@@ -107,7 +115,10 @@ func _ready() -> void:
 	_runner = get_node(runner_path)
 	_hud_label = get_node(hud_label_path) as Label
 	_setup_audio()
+	_setup_state_overlay()
 	_build_stage_one()
+	_runner.set_input_enabled(false)
+	_show_start_screen()
 	_update_hud()
 
 func _exit_tree() -> void:
@@ -132,7 +143,9 @@ func _process(delta: float) -> void:
 		restart_stage()
 		return
 
-	if _game_over:
+	if not _run_active or _game_over:
+		if Input.is_action_just_pressed("ui_accept"):
+			_start_game()
 		return
 
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
@@ -181,6 +194,8 @@ func restart_stage() -> void:
 	_score = 0
 	_stage = 1
 	_game_over = false
+	_game_complete = false
+	_run_active = true
 	_fire_timer = 0.0
 	_damage_invulnerability_timer = 0.0
 	_runner.set_input_enabled(true)
@@ -192,7 +207,11 @@ func restart_stage() -> void:
 	_build_stage_one()
 	_storm.set_guide_overdraw_enabled(true)
 	_load_music_stage(1)
+	_hide_state_overlay()
 	_update_hud()
+
+func _start_game() -> void:
+	restart_stage()
 
 func _build_stage_one() -> void:
 	_hazards.clear()
@@ -299,6 +318,106 @@ func _spawn_hazard(distance: float, lane: int, kind: String) -> StageHazard:
 func _stage_end_distance() -> float:
 	return maxf(_storm.route_length, 1.0)
 
+func _setup_state_overlay() -> void:
+	_state_layer = CanvasLayer.new()
+	_state_layer.layer = 20
+	_state_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_state_layer)
+
+	var dim: ColorRect = ColorRect.new()
+	dim.name = "StateDim"
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.0, 0.0, 0.0, 0.52)
+	_state_layer.add_child(dim)
+	_state_panel = dim
+
+	var panel: PanelContainer = PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -210.0
+	panel.offset_top = -130.0
+	panel.offset_right = 210.0
+	panel.offset_bottom = 130.0
+	panel.add_theme_stylebox_override("panel", _state_panel_style())
+	dim.add_child(panel)
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 26)
+	margin.add_theme_constant_override("margin_top", 22)
+	margin.add_theme_constant_override("margin_right", 26)
+	margin.add_theme_constant_override("margin_bottom", 22)
+	panel.add_child(margin)
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	margin.add_child(box)
+
+	_state_title = Label.new()
+	_state_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_state_title.add_theme_color_override("font_color", Color(0.3, 1.0, 1.0))
+	_state_title.add_theme_font_size_override("font_size", 34)
+	box.add_child(_state_title)
+
+	_state_body = Label.new()
+	_state_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_state_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_state_body.add_theme_color_override("font_color", Color(0.78, 0.92, 1.0))
+	_state_body.add_theme_font_size_override("font_size", 16)
+	box.add_child(_state_body)
+
+	_state_primary_button = Button.new()
+	_state_primary_button.custom_minimum_size = Vector2(0.0, 40.0)
+	_state_primary_button.pressed.connect(_start_game)
+	box.add_child(_state_primary_button)
+
+	_state_secondary_button = Button.new()
+	_state_secondary_button.custom_minimum_size = Vector2(0.0, 34.0)
+	_state_secondary_button.text = "Exit"
+	_state_secondary_button.pressed.connect(_on_state_exit_pressed)
+	box.add_child(_state_secondary_button)
+
+func _state_panel_style() -> StyleBoxFlat:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.006, 0.014, 0.05, 0.92)
+	style.border_color = Color(0.0, 0.9, 1.0, 0.85)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_right = 6
+	style.corner_radius_bottom_left = 6
+	return style
+
+func _show_start_screen() -> void:
+	_run_active = false
+	_state_title.text = "MIRANDA"
+	_state_body.text = "Stage 1"
+	_state_primary_button.text = "Start"
+	_state_panel.visible = true
+	_state_primary_button.grab_focus()
+
+func _show_game_over_screen() -> void:
+	_state_title.text = "GAME OVER"
+	_state_body.text = "Score %04d    Stage %d" % [_score, _stage]
+	_state_primary_button.text = "Restart"
+	_state_panel.visible = true
+	_state_primary_button.grab_focus()
+
+func _show_complete_screen() -> void:
+	_state_title.text = "STORM CLEAR"
+	_state_body.text = "Score %04d" % _score
+	_state_primary_button.text = "Restart"
+	_state_panel.visible = true
+	_state_primary_button.grab_focus()
+
+func _hide_state_overlay() -> void:
+	if _state_panel:
+		_state_panel.visible = false
+
+func _on_state_exit_pressed() -> void:
+	get_tree().quit()
+
 func _advance_stage() -> void:
 	_play_sfx(CLEAR_SOUND)
 	_damage_invulnerability_timer = 0.0
@@ -319,16 +438,15 @@ func _advance_stage() -> void:
 		return
 	_runner.set_input_enabled(false)
 	_game_over = true
+	_game_complete = true
+	_run_active = false
+	_show_complete_screen()
 	_update_hud()
 
 func _ensure_marker(hazard: StageHazard) -> void:
 	if _active_markers.has(hazard):
 		return
-	var marker: Node3D = Node3D.new()
-	var body: MeshInstance3D = MeshInstance3D.new()
-	body.mesh = _mesh_for_kind(hazard.kind)
-	body.material_override = _material_for_kind(hazard.kind)
-	marker.add_child(body)
+	var marker: Node3D = _build_enemy_marker(hazard.kind)
 	_storm.add_child(marker)
 	_active_markers[hazard] = marker
 
@@ -343,6 +461,7 @@ func _update_marker_pose(hazard: StageHazard) -> void:
 	var side: Vector3 = radial.cross(forward).normalized()
 	marker.global_position = sample.position + radial * (_storm.radius * 0.84)
 	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
+	_animate_enemy_art(marker, hazard.kind)
 
 func _hit_player(hazard: StageHazard) -> void:
 	hazard.hit = true
@@ -508,12 +627,8 @@ func _anchor_rim_obstacle(hazard: StageHazard) -> void:
 	_update_rim_obstacle_pose(obstacle, _lane_stack_index(obstacle))
 
 func _build_obstacle_marker(kind: String) -> Node3D:
-	var marker: Node3D = Node3D.new()
-	var body: MeshInstance3D = MeshInstance3D.new()
-	body.mesh = _mesh_for_kind(kind)
-	body.material_override = _material_for_kind(kind)
-	body.scale = Vector3.ONE * 1.15
-	marker.add_child(body)
+	var marker: Node3D = _build_enemy_marker(kind)
+	marker.scale = Vector3.ONE * 1.15
 	return marker
 
 func _update_rim_obstacles(delta: float, player_lane: int) -> void:
@@ -557,6 +672,7 @@ func _update_rim_obstacle_pose(obstacle: RimObstacle, stack_index: int) -> void:
 	var side_offset: float = _stack_offset(stack_index)
 	obstacle.marker.global_position = sample.position + radial * (_storm.radius * 0.86) + side * side_offset
 	obstacle.marker.global_basis = Basis(side, radial, -forward).orthonormalized()
+	_animate_enemy_art(obstacle.marker, obstacle.kind)
 
 func _lane_stack_index(obstacle: RimObstacle) -> int:
 	var index: int = 0
@@ -608,12 +724,15 @@ func _trigger_game_over() -> void:
 	if _game_over:
 		return
 	_game_over = true
+	_game_complete = false
+	_run_active = false
 	_runner.set_input_enabled(false)
 	_clear_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
 	_play_sfx(GAME_OVER_SOUND, -2.0)
+	_show_game_over_screen()
 
 func _burst_rim_obstacles() -> void:
 	for obstacle in _rim_obstacles:
@@ -644,33 +763,96 @@ func _clear_rim_obstacles() -> void:
 		obstacle.marker.queue_free()
 	_rim_obstacles.clear()
 
-func _mesh_for_kind(kind: String) -> Mesh:
+func _build_enemy_marker(kind: String) -> Node3D:
+	var marker: Node3D = Node3D.new()
+	marker.set_meta("kind", kind)
+	var material: StandardMaterial3D = _material_for_kind(kind)
+	var accent: StandardMaterial3D = _accent_material_for_kind(kind)
 	match kind:
 		"tanker":
-			var mesh: BoxMesh = BoxMesh.new()
-			mesh.size = Vector3(2.6, 1.1, 1.4)
-			return mesh
+			_add_box_part(marker, Vector3(2.5, 0.72, 1.35), Vector3.ZERO, Vector3.ZERO, material)
+			_add_box_part(marker, Vector3(0.32, 1.24, 1.7), Vector3(-1.15, 0.0, 0.0), Vector3.ZERO, accent)
+			_add_box_part(marker, Vector3(0.32, 1.24, 1.7), Vector3(1.15, 0.0, 0.0), Vector3.ZERO, accent)
+			_add_sphere_part(marker, 0.28, Vector3(0.0, 0.52, -0.72), material)
 		"spiker":
-			var mesh: PrismMesh = PrismMesh.new()
-			mesh.size = Vector3(1.5, 1.2, 2.3)
-			return mesh
+			_add_prism_part(marker, Vector3(0.62, 0.62, 2.75), Vector3.ZERO, Vector3.ZERO, material)
+			_add_box_part(marker, Vector3(1.65, 0.08, 0.18), Vector3(0.0, 0.0, -0.35), Vector3(0.0, 0.0, 0.35), accent)
+			_add_box_part(marker, Vector3(1.15, 0.08, 0.16), Vector3(0.0, 0.0, 0.45), Vector3(0.0, 0.0, -0.45), accent)
+			_add_prism_part(marker, Vector3(0.28, 0.28, 0.9), Vector3(-0.48, 0.16, 0.82), Vector3(0.0, 0.0, 0.35), accent)
+			_add_prism_part(marker, Vector3(0.28, 0.28, 0.9), Vector3(0.48, -0.16, 0.82), Vector3(0.0, 0.0, -0.35), accent)
 		"pulsar":
-			var mesh: SphereMesh = SphereMesh.new()
-			mesh.radius = 0.78
-			mesh.height = 1.55
-			return mesh
+			var spin: Node3D = Node3D.new()
+			spin.name = "Spin"
+			marker.add_child(spin)
+			_add_sphere_part(spin, 0.58, Vector3.ZERO, material)
+			_add_box_part(spin, Vector3(2.05, 0.08, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
+			_add_box_part(spin, Vector3(0.08, 2.05, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
+			_add_box_part(spin, Vector3(0.08, 0.08, 1.45), Vector3.ZERO, Vector3.ZERO, accent)
 		"exploder":
-			var mesh: SphereMesh = SphereMesh.new()
-			mesh.radius = 1.0
-			mesh.height = 2.0
-			return mesh
+			var pulse: Node3D = Node3D.new()
+			pulse.name = "Pulse"
+			marker.add_child(pulse)
+			_add_sphere_part(pulse, 0.74, Vector3.ZERO, material)
+			_add_box_part(pulse, Vector3(2.0, 0.07, 0.07), Vector3.ZERO, Vector3(0.0, 0.0, 0.55), accent)
+			_add_box_part(pulse, Vector3(0.07, 2.0, 0.07), Vector3.ZERO, Vector3(0.0, 0.0, -0.55), accent)
+			_add_box_part(pulse, Vector3(0.07, 0.07, 2.0), Vector3.ZERO, Vector3(0.55, 0.0, 0.0), accent)
 		"spike":
-			var mesh: PrismMesh = PrismMesh.new()
-			mesh.size = Vector3(0.9, 0.9, 1.5)
-			return mesh
+			_add_prism_part(marker, Vector3(0.42, 0.42, 1.45), Vector3.ZERO, Vector3.ZERO, material)
+			_add_prism_part(marker, Vector3(0.32, 0.32, 1.05), Vector3(-0.36, 0.0, 0.12), Vector3(0.0, 0.85, 0.0), accent)
+			_add_prism_part(marker, Vector3(0.32, 0.32, 1.05), Vector3(0.36, 0.0, 0.12), Vector3(0.0, -0.85, 0.0), accent)
+		_:
+			_add_prism_part(marker, Vector3(0.82, 0.52, 2.05), Vector3.ZERO, Vector3.ZERO, material)
+			_add_box_part(marker, Vector3(1.45, 0.08, 0.34), Vector3(0.0, 0.0, 0.35), Vector3(0.0, 0.0, -0.45), accent)
+			_add_box_part(marker, Vector3(0.78, 0.08, 0.28), Vector3(-0.48, 0.0, -0.32), Vector3(0.0, 0.0, 0.62), accent)
+			_add_box_part(marker, Vector3(0.78, 0.08, 0.28), Vector3(0.48, 0.0, -0.32), Vector3(0.0, 0.0, -0.62), accent)
+	return marker
+
+func _add_box_part(parent: Node3D, size: Vector3, position: Vector3, rotation: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
+	var part: MeshInstance3D = MeshInstance3D.new()
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = size
+	part.mesh = mesh
+	part.position = position
+	part.rotation = rotation
+	part.material_override = material
+	parent.add_child(part)
+	return part
+
+func _add_prism_part(parent: Node3D, size: Vector3, position: Vector3, rotation: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
+	var part: MeshInstance3D = MeshInstance3D.new()
 	var mesh: PrismMesh = PrismMesh.new()
-	mesh.size = Vector3(1.1, 0.9, 2.0)
-	return mesh
+	mesh.size = size
+	part.mesh = mesh
+	part.position = position
+	part.rotation = rotation
+	part.material_override = material
+	parent.add_child(part)
+	return part
+
+func _add_sphere_part(parent: Node3D, radius: float, position: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
+	var part: MeshInstance3D = MeshInstance3D.new()
+	var mesh: SphereMesh = SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	part.mesh = mesh
+	part.position = position
+	part.material_override = material
+	parent.add_child(part)
+	return part
+
+func _animate_enemy_art(marker: Node3D, kind: String) -> void:
+	var time: float = float(Time.get_ticks_msec()) * 0.001
+	match kind:
+		"pulsar":
+			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
+			if spin:
+				spin.rotation = Vector3(time * 2.1, time * 1.2, time * 2.8)
+		"exploder":
+			var pulse: Node3D = marker.get_node_or_null("Pulse") as Node3D
+			if pulse:
+				var scale_amount: float = 1.0 + 0.13 * sin(time * 11.0)
+				pulse.scale = Vector3.ONE * scale_amount
+				pulse.rotation = Vector3(time * 1.4, time * 0.9, time * 1.8)
 
 func _material_for_kind(kind: String) -> StandardMaterial3D:
 	var color: Color = Color(1.0, 0.25, 0.25)
@@ -697,6 +879,30 @@ func _material_for_kind(kind: String) -> StandardMaterial3D:
 	material.emission_enabled = true
 	material.emission = emission
 	material.emission_energy_multiplier = 2.2
+	return material
+
+func _accent_material_for_kind(kind: String) -> StandardMaterial3D:
+	var color: Color = Color(1.0, 0.55, 1.0)
+	var emission: Color = Color(1.0, 0.15, 1.0)
+	match kind:
+		"tanker":
+			color = Color(1.0, 0.86, 0.18)
+			emission = Color(1.0, 0.62, 0.04)
+		"spiker", "spike":
+			color = Color(1.0, 0.18, 1.0)
+			emission = Color(0.95, 0.0, 1.0)
+		"pulsar":
+			color = Color(1.0, 1.0, 0.58)
+			emission = Color(1.0, 0.96, 0.12)
+		"exploder":
+			color = Color(1.0, 0.32, 0.18)
+			emission = Color(1.0, 0.08, 0.0)
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = emission
+	material.emission_energy_multiplier = 3.1
 	return material
 
 func _bullet_material() -> StandardMaterial3D:
@@ -819,6 +1025,8 @@ func _update_hud() -> void:
 		if hazard.spawned and not hazard.cleared:
 			active_hazards += 1
 	var status: String = ""
+	if not _run_active and not _game_over:
+		status = "READY"
 	if _game_over:
-		status = "GAME OVER - R restart"
-	_hud_label.text = "STAGE %d  DIST %04d  SPD %02d  SCORE %04d  LIVES %d  RIM %d  ACT %d  PROGRESS %d%%\nLeft/Right step lanes   Space fire   Up/Down speed   P pause   %s" % [_stage, distance, speed, _score, lives, _rim_obstacles.size(), active_hazards, progress, status]
+		status = "CLEAR" if _game_complete else "GAME OVER"
+	_hud_label.text = "STAGE %d  DIST %04d  SPD %02d  SCORE %04d  LIVES %d  RIM %d  ACT %d  PROGRESS %d%%  %s" % [_stage, distance, speed, _score, lives, _rim_obstacles.size(), active_hazards, progress, status]
