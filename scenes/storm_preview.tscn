@@ -1,0 +1,165 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/storm_tube.gd" id="1_tube"]
+[ext_resource type="Script" path="res://scripts/storm_camera.gd" id="2_camera"]
+[ext_resource type="Script" path="res://scripts/storm_player.gd" id="3_player"]
+[ext_resource type="Script" path="res://scripts/storm_stage.gd" id="4_stage"]
+[ext_resource type="Script" path="res://scripts/pause_menu.gd" id="5_pause"]
+
+[sub_resource type="Environment" id="Environment_storm"]
+background_mode = 1
+background_color = Color(0.002, 0.004, 0.016, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.08, 0.13, 0.28, 1)
+ambient_light_energy = 0.45
+glow_enabled = true
+glow_intensity = 1.1
+glow_strength = 0.85
+glow_bloom = 0.25
+fog_enabled = true
+fog_light_color = Color(0.025, 0.04, 0.11, 1)
+fog_light_energy = 0.55
+fog_density = 0.002
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
+bg_color = Color(0.01, 0.02, 0.08, 0.72)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_pause"]
+bg_color = Color(0.006, 0.014, 0.05, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0.9, 1, 0.85)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="StormPreview" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_storm")
+
+[node name="Storm" type="Node3D" parent="."]
+script = ExtResource("1_tube")
+
+[node name="Player" type="Node3D" parent="."]
+script = ExtResource("3_player")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+current = true
+fov = 78.0
+near = 0.05
+far = 2000.0
+script = ExtResource("2_camera")
+storm_path = NodePath("../Storm")
+player_path = NodePath("../Player")
+
+[node name="Stage" type="Node" parent="."]
+script = ExtResource("4_stage")
+storm_path = NodePath("../Storm")
+runner_path = NodePath("../Camera3D")
+hud_label_path = NodePath("../Overlay/Panel/Margin/Text")
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="Overlay"]
+offset_left = 18.0
+offset_top = 18.0
+offset_right = 445.0
+offset_bottom = 94.0
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="Overlay/Panel"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="Text" type="Label" parent="Overlay/Panel/Margin"]
+theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "THE STORM - lane route study\nLeft/Right step lanes   Space fire   Up/Down speed   P pause"
+
+[node name="PauseMenu" type="CanvasLayer" parent="."]
+script = ExtResource("5_pause")
+panel_path = NodePath("Dim")
+music_slider_path = NodePath("Dim/Panel/Margin/VBox/MusicRow/MusicSlider")
+sound_slider_path = NodePath("Dim/Panel/Margin/VBox/SoundRow/SoundSlider")
+exit_button_path = NodePath("Dim/Panel/Margin/VBox/ExitButton")
+
+[node name="Dim" type="ColorRect" parent="PauseMenu"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="Panel" type="PanelContainer" parent="PauseMenu/Dim"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -180.0
+offset_top = -118.0
+offset_right = 180.0
+offset_bottom = 118.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBox_pause")
+
+[node name="Margin" type="MarginContainer" parent="PauseMenu/Dim/Panel"]
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 18
+
+[node name="VBox" type="VBoxContainer" parent="PauseMenu/Dim/Panel/Margin"]
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="PauseMenu/Dim/Panel/Margin/VBox"]
+theme_override_colors/font_color = Color(0.3, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+text = "PAUSED"
+
+[node name="MusicRow" type="HBoxContainer" parent="PauseMenu/Dim/Panel/Margin/VBox"]
+theme_override_constants/separation = 12
+
+[node name="MusicLabel" type="Label" parent="PauseMenu/Dim/Panel/Margin/VBox/MusicRow"]
+custom_minimum_size = Vector2(70, 0)
+theme_override_colors/font_color = Color(0.78, 0.92, 1, 1)
+text = "Music"
+
+[node name="MusicSlider" type="HSlider" parent="PauseMenu/Dim/Panel/Margin/VBox/MusicRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 80.0
+
+[node name="SoundRow" type="HBoxContainer" parent="PauseMenu/Dim/Panel/Margin/VBox"]
+theme_override_constants/separation = 12
+
+[node name="SoundLabel" type="Label" parent="PauseMenu/Dim/Panel/Margin/VBox/SoundRow"]
+custom_minimum_size = Vector2(70, 0)
+theme_override_colors/font_color = Color(0.78, 0.92, 1, 1)
+text = "Sound"
+
+[node name="SoundSlider" type="HSlider" parent="PauseMenu/Dim/Panel/Margin/VBox/SoundRow"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+value = 80.0
+
+[node name="ExitButton" type="Button" parent="PauseMenu/Dim/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 36)
+text = "Exit"
