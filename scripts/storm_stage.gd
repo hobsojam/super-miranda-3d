@@ -27,12 +27,12 @@ const STAGE_TRANSITION_TIME := 1.85
 
 @export var storm_path: NodePath
 @export var runner_path: NodePath
+@export var player_path: NodePath
 @export var hud_label_path: NodePath
 @export var hit_window: float = 4.2
 @export var lives: int = 3
 @export var bullet_speed: float = 140.0
 @export var bullet_range: float = 220.0
-@export var fire_cooldown: float = 0.18
 @export var hazard_reveal_distance: float = 520.0
 @export var hazard_closing_speed: float = 0.0
 @export var low_intensity_obstacles: int = 0
@@ -49,6 +49,7 @@ const STAGE_TRANSITION_TIME := 1.85
 
 var _storm: StormTube
 var _runner: Node
+var _player: StormPlayer
 var _hud_label: Label
 var _hud: StageHud
 var _hazards: Array[StageHazard] = []
@@ -66,7 +67,6 @@ var _score: int = 0
 var _stage: int = 1
 var _game_over: bool = false
 var _game_complete: bool = false
-var _fire_timer: float = 0.0
 var _base_passes: Array[AudioStream] = []
 var _drums_high_passes: Array[AudioStream] = []
 var _pass_index: int = 0
@@ -125,11 +125,14 @@ class RimObstacle:
 func _ready() -> void:
 	_storm = get_node(storm_path) as StormTube
 	_runner = get_node(runner_path)
+	_player = get_node(player_path) as StormPlayer
 	_hud_label = get_node(hud_label_path) as Label
+	_player.fire_requested.connect(_on_player_fire_requested)
 	_setup_audio()
 	_setup_hud()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
+	_player.set_fire_enabled(false)
 	_hud.show_start_screen()
 	_update_hud()
 
@@ -172,10 +175,6 @@ func _process(delta: float) -> void:
 		return
 
 	_stage_elapsed_time += delta
-	_fire_timer = maxf(_fire_timer - delta, 0.0)
-	if Input.is_key_pressed(KEY_SPACE) and _fire_timer <= 0.0:
-		_fire()
-		_fire_timer = fire_cooldown
 
 	var player_distance: float = _runner.distance()
 	var player_lane: int = _runner.lane_index()
@@ -228,7 +227,6 @@ func _start_stage(stage: int) -> void:
 	_game_over = false
 	_game_complete = false
 	_run_active = true
-	_fire_timer = 0.0
 	_damage_invulnerability_timer = 0.0
 	_hud.clear_notice()
 	_stage_elapsed_time = 0.0
@@ -236,6 +234,8 @@ func _start_stage(stage: int) -> void:
 	_pending_stage = 0
 	_last_stage_time_bonus = 0
 	_runner.set_input_enabled(true)
+	_player.set_fire_enabled(true)
+	_player.reset_fire_cooldown()
 	_runner.restart_run()
 	_clear_markers()
 	_clear_pickup_markers()
@@ -250,6 +250,11 @@ func _start_stage(stage: int) -> void:
 
 func _start_game() -> void:
 	_start_stage(_hud.selected_start_stage)
+
+func _on_player_fire_requested() -> void:
+	if not _run_active or _game_over:
+		return
+	_fire()
 
 func _build_stage_for(stage: int) -> void:
 	_hazards.clear()
@@ -441,6 +446,7 @@ func _advance_stage() -> void:
 		_stage_transition_timer = STAGE_TRANSITION_TIME
 		_run_active = false
 		_runner.set_input_enabled(false)
+		_player.set_fire_enabled(false)
 		_hud.show_stage_clear_screen(
 			completed_stage,
 			_score,
@@ -451,6 +457,7 @@ func _advance_stage() -> void:
 		_update_hud()
 		return
 	_runner.set_input_enabled(false)
+	_player.set_fire_enabled(false)
 	_game_over = true
 	_game_complete = true
 	_run_active = false
@@ -463,11 +470,12 @@ func _continue_to_pending_stage() -> void:
 	_stage = _pending_stage
 	_pending_stage = 0
 	_stage_elapsed_time = 0.0
-	_fire_timer = 0.0
 	_damage_invulnerability_timer = 0.0
 	_hud.clear_notice()
 	_runner.restart_run()
 	_runner.set_input_enabled(true)
+	_player.set_fire_enabled(true)
+	_player.reset_fire_cooldown()
 	_run_active = true
 	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
 	_load_music_stage(_stage)
@@ -890,6 +898,7 @@ func _trigger_game_over() -> void:
 	_game_complete = false
 	_run_active = false
 	_runner.set_input_enabled(false)
+	_player.set_fire_enabled(false)
 	_clear_markers()
 	_clear_pickup_markers()
 	_clear_bullets()
