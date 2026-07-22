@@ -36,9 +36,22 @@ touching anything under `scripts/`.
 
 ## Build
 
-No packaged export exists yet — no `export_presets.cfg` is committed, and
-CI stops at import/lint/test/smoke-load (`.github/workflows/ci.yml`). Add a
-Godot export preset first if a runnable build is needed.
+`export_presets.cfg` has a "Windows Desktop" preset. Install matching
+export templates first, create the output directory (Godot won't), then:
+`godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe`.
+See `AGENTS.md` for the full setup steps (export templates, `rcedit` for
+icon embedding). `build/` is gitignored. CI stops at
+import/lint/test/smoke-load (`.github/workflows/ci.yml`) — building this
+preset in CI and publishing releases is on `BACKLOG.md`, not done yet.
+
+## Keep Docs And Commits Portable
+
+Never write anything security-relevant (credentials, API keys, tokens,
+internal URLs) or specific to one person's machine (absolute paths,
+personal directory layouts, local tool install locations) into this
+repo — including `README.md`, `AGENTS.md`, `CLAUDE.md`, commit messages,
+and code comments. Prefer commands that assume a standard PATH-available
+tool over anything tied to one contributor's environment.
 
 ## Architecture
 

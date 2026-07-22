@@ -38,15 +38,34 @@ almost every system.
 
 ## Fullscreen Mode
 
-Add a proper fullscreen/windowed toggle for playtesting and eventual packaged
-builds.
+F11/Alt+Enter shortcut and a pause-menu checkbox are done. Godot's embedded
+editor preview does not support fullscreen at all, so this can only be
+verified in a real packaged build — see Windows Build Automation below for
+how to produce one.
 
-Consider:
+Still open:
 
-- Keyboard shortcut, probably Alt+Enter or F11.
-- Menu or pause-menu toggle.
-- Persisting the choice if project settings support it cleanly.
-- Making sure UI scale and the tunnel framing still work after the mode switch.
+- Persisting the choice across sessions if project settings support it
+  cleanly.
+- Confirming UI scale and tunnel framing hold up in an actual standalone
+  build, not just in theory.
+
+## Windows Build Automation
+
+`export_presets.cfg` now has a local "Windows Desktop" preset (see
+`AGENTS.md` for how to run it) so a real `.exe` can be built and playtested
+by hand. Not done yet:
+
+- A CI job that runs the export on push/PR and uploads the `.exe` as a
+  workflow artifact, so builds don't depend on anyone's local export
+  templates. Needs the matching Godot export templates cached/installed on
+  the CI runner (`.tpz` package matching `GODOT_VERSION`/`GODOT_RELEASE` in
+  `.github/workflows/ci.yml`).
+- Deciding whether `rcedit` (needed to embed the icon/version info into the
+  `.exe`) is worth installing in CI, or whether CI builds ship with a
+  generic Explorer icon.
+- Automated GitHub Releases publishing the `.exe` (e.g. on version tags),
+  once there's an actual versioning scheme for the project.
 
 ## Environmental Hazards
 
