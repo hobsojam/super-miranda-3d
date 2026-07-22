@@ -31,13 +31,13 @@ var _player: StormPlayer
 var _hud_label: Label
 var _hud: StageHud
 var _audio: StageAudio
+var _rim_obstacles: RimObstacleManager
 var _hazards: Array[StageHazard] = []
 var _pickups: Array[StagePickup] = []
 var _bullets: Array[StageBullet] = []
 var _enemy_bolts: Array[EnemyBolt] = []
 var _active_markers: Dictionary = {}
 var _pickup_markers: Dictionary = {}
-var _rim_obstacles: Array[RimObstacle] = []
 var _score: int = 0
 var _stage: int = 1
 var _game_over: bool = false
@@ -84,14 +84,6 @@ class EnemyBolt:
 	var distance: float
 	var marker: Node3D
 
-class RimObstacle:
-	var lane: int
-	var kind: String
-	var marker: Node3D
-	var hop_timer: float = 0.0
-	var fuse_timer: float = 0.0
-	var stability: float = 1.0
-
 func _ready() -> void:
 	_storm = get_node(storm_path) as StormTube
 	_runner = get_node(runner_path)
@@ -100,6 +92,7 @@ func _ready() -> void:
 	_player.fire_requested.connect(_on_player_fire_requested)
 	_setup_audio()
 	_setup_hud()
+	_setup_rim_obstacles()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
 	_player.set_fire_enabled(false)
@@ -161,7 +154,7 @@ func _process(delta: float) -> void:
 		var relative: float = hazard.distance - player_distance
 		if relative < -hit_window:
 			_remove_marker(hazard)
-			if _should_anchor_hazard(hazard):
+			if RimObstacleManager.should_anchor_kind(hazard.kind):
 				_anchor_rim_obstacle(hazard)
 			else:
 				hazard.cleared = true
@@ -379,6 +372,10 @@ func _setup_hud() -> void:
 	_hud.exit_pressed.connect(_on_hud_exit_pressed)
 	_hud.stage_selected.connect(_on_hud_stage_selected)
 
+func _setup_rim_obstacles() -> void:
+	_rim_obstacles = RimObstacleManager.new()
+	_rim_obstacles.setup(_storm, _runner, flipper_hop_interval, exploder_fuse_time)
+
 func _on_hud_exit_pressed() -> void:
 	get_tree().quit()
 
@@ -555,10 +552,8 @@ func _destroy_pickup(pickup: StagePickup) -> void:
 	_play_sfx(StageAudio.KILL_SOUND, -12.0)
 
 func _purge_rim_obstacles() -> void:
-	for obstacle in _rim_obstacles:
-		_spawn_burst(obstacle.marker.global_position)
-		obstacle.marker.queue_free()
-	_rim_obstacles.clear()
+	for position in _rim_obstacles.purge():
+		_spawn_burst(position)
 
 func _spawn_pickup_collect_effect(position: Vector3, kind: String) -> void:
 	var effect: Node3D = Node3D.new()
@@ -736,112 +731,27 @@ func _anchor_rim_obstacle(hazard: StageHazard) -> void:
 		return
 	hazard.anchored = true
 	hazard.cleared = true
-	var obstacle: RimObstacle = RimObstacle.new()
-	obstacle.lane = hazard.lane
-	obstacle.kind = hazard.kind
-	obstacle.hop_timer = flipper_hop_interval
-	obstacle.fuse_timer = exploder_fuse_time
-	obstacle.marker = _build_obstacle_marker(hazard.kind)
-	_storm.add_child(obstacle.marker)
-	_rim_obstacles.append(obstacle)
-	_update_rim_obstacle_pose(obstacle, _lane_stack_index(obstacle))
-
-func _should_anchor_hazard(hazard: StageHazard) -> bool:
-	return hazard.kind != "gate_field" and hazard.kind != "gate_post"
-
-func _build_obstacle_marker(kind: String) -> Node3D:
-	var marker: Node3D = StageMarkerFactory.build_enemy_marker(kind)
-	marker.scale = Vector3.ONE * 1.15
-	return marker
+	_rim_obstacles.anchor(hazard.lane, hazard.kind)
 
 func _update_rim_obstacles(delta: float, player_lane: int) -> void:
-	for i in range(_rim_obstacles.size() - 1, -1, -1):
-		var obstacle: RimObstacle = _rim_obstacles[i]
-		if _decay_anchor_obstacle(obstacle, delta):
-			_rim_obstacles.remove_at(i)
-			continue
-		match obstacle.kind:
-			"flipper":
-				obstacle.hop_timer -= delta
-				if obstacle.hop_timer <= 0.0:
-					obstacle.hop_timer = flipper_hop_interval
-					obstacle.lane = _step_lane_toward(obstacle.lane, player_lane)
-			"exploder":
-				obstacle.fuse_timer -= delta
-				if obstacle.fuse_timer <= 0.0:
-					_spawn_burst(obstacle.marker.global_position)
-					obstacle.marker.queue_free()
-					_rim_obstacles.remove_at(i)
-					_damage_player(StageAudio.EXPLODER_SOUND)
-					if _game_over:
-						return
-					continue
-		_update_rim_obstacle_pose(obstacle, _lane_stack_index(obstacle))
-
-func _decay_anchor_obstacle(obstacle: RimObstacle, delta: float) -> bool:
-	var decay: float = StageRules.anchor_decay_amount(_runner.speed(), delta)
-	if decay <= 0.0:
-		return false
-	obstacle.stability -= decay
-	var pulse_scale: float = 1.0 + (1.0 - obstacle.stability) * 0.18
-	obstacle.marker.scale = Vector3.ONE * 1.15 * pulse_scale
-	if obstacle.stability > 0.0:
-		return false
-	_spawn_burst(obstacle.marker.global_position)
-	obstacle.marker.queue_free()
-	_play_sfx(StageAudio.KILL_SOUND, -8.0)
-	return true
-
-func _step_lane_toward(from_lane: int, target_lane: int) -> int:
-	var count: int = _storm.lane_count
-	var diff: int = target_lane - from_lane
-	diff = ((diff % count) + count) % count
-	if diff > count / 2:
-		diff -= count
-	if diff == 0:
-		return from_lane
-	var step: int = 1 if diff > 0 else -1
-	return wrapi(from_lane + step, 0, count)
-
-func _update_rim_obstacle_pose(obstacle: RimObstacle, stack_index: int) -> void:
-	var sample: StormTube.RouteSample = _storm.sample_at_distance(_runner.distance() + 1.8)
-	var lane_angle: float = _runner.lane_angle_for_index(obstacle.lane)
-	var radial: Vector3 = sample.right * cos(lane_angle) + sample.up * sin(lane_angle)
-	var forward: Vector3 = sample.tangent.normalized()
-	var side: Vector3 = radial.cross(forward).normalized()
-	var side_offset: float = _stack_offset(stack_index)
-	obstacle.marker.global_position = sample.position + radial * (_storm.radius * 0.86) + side * side_offset
-	obstacle.marker.global_basis = Basis(side, radial, -forward).orthonormalized()
-	StageMarkerFactory.animate_enemy_art(obstacle.marker, obstacle.kind)
-
-func _lane_stack_index(obstacle: RimObstacle) -> int:
-	var index: int = 0
-	for other in _rim_obstacles:
-		if other == obstacle:
-			return index
-		if other.lane == obstacle.lane:
-			index += 1
-	return index
-
-func _stack_offset(index: int) -> float:
-	if index == 0:
-		return 0.0
-	var side: float = 1.0 if index % 2 == 1 else -1.0
-	return side * ceil(float(index) / 2.0) * 0.62
+	for event in _rim_obstacles.update(delta, player_lane, _runner.speed()):
+		_spawn_burst(event["position"])
+		if event["type"] == "decayed":
+			_play_sfx(StageAudio.KILL_SOUND, -8.0)
+		elif event["type"] == "exploded":
+			_damage_player(StageAudio.EXPLODER_SOUND)
+			if _game_over:
+				return
 
 func _check_rim_obstacle_collision(player_lane: int) -> void:
 	if not _can_damage_player():
 		return
-	for i in range(_rim_obstacles.size() - 1, -1, -1):
-		var obstacle: RimObstacle = _rim_obstacles[i]
-		if obstacle.lane != player_lane:
-			continue
-		obstacle.marker.queue_free()
-		_rim_obstacles.remove_at(i)
-		_damage_player(
-			StageAudio.EXPLODER_SOUND if obstacle.kind == "exploder" else StageAudio.HIT_SOUND
-		)
+	var collision: Dictionary = _rim_obstacles.take_collision(player_lane)
+	if collision.is_empty():
 		return
+	_damage_player(
+		StageAudio.EXPLODER_SOUND if collision["kind"] == "exploder" else StageAudio.HIT_SOUND
+	)
 
 func _damage_player(sound: AudioStream) -> void:
 	if not _can_damage_player():
@@ -874,9 +784,9 @@ func _trigger_game_over() -> void:
 	_hud.show_game_over_screen(_score, _stage)
 
 func _burst_rim_obstacles() -> void:
-	for obstacle in _rim_obstacles:
-		_spawn_burst(obstacle.marker.global_position)
-	if not _rim_obstacles.is_empty():
+	for position in _rim_obstacles.positions():
+		_spawn_burst(position)
+	if _rim_obstacles.count() > 0:
 		_play_sfx(StageAudio.EXPLODER_SOUND, -5.0)
 
 func _spawn_burst(position: Vector3) -> void:
@@ -888,8 +798,6 @@ func _spawn_burst(position: Vector3) -> void:
 	tween.tween_callback(burst.queue_free)
 
 func _clear_rim_obstacles() -> void:
-	for obstacle in _rim_obstacles:
-		obstacle.marker.queue_free()
 	_rim_obstacles.clear()
 
 func _setup_audio() -> void:
@@ -898,7 +806,7 @@ func _setup_audio() -> void:
 	_audio.setup(1)
 
 func _update_music_intensity(delta: float) -> void:
-	var active_pressure: int = _rim_obstacles.size()
+	var active_pressure: int = _rim_obstacles.count()
 	for hazard in _hazards:
 		if hazard.spawned and not hazard.cleared and hazard.distance - _runner.distance() < hazard_reveal_distance:
 			active_pressure += 1
@@ -934,7 +842,7 @@ func _update_hud() -> void:
 		speed,
 		_score,
 		lives,
-		_rim_obstacles.size(),
+		_rim_obstacles.count(),
 		active_hazards,
 		progress,
 		status

@@ -6,6 +6,7 @@ const StageHudScript := preload("res://scripts/stage_hud.gd")
 const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
 const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
 const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
+const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd")
 const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
@@ -19,6 +20,7 @@ func _initialize() -> void:
 	_test_stage_hud()
 	_test_marker_factory()
 	_test_stage_definitions()
+	_test_rim_obstacle_rules()
 	_test_player_fire_intent()
 
 	if _failures == 0:
@@ -180,6 +182,22 @@ func _test_stage_definitions() -> void:
 		not StageTwoDefinitionScript.guide_overdraw_enabled(),
 		"stage 2 disables guide overdraw"
 	)
+
+func _test_rim_obstacle_rules() -> void:
+	_assert_true(RimObstacleManagerScript.should_anchor_kind("flipper"), "flippers anchor")
+	_assert_true(not RimObstacleManagerScript.should_anchor_kind("gate_field"), "fields do not anchor")
+	_assert_true(not RimObstacleManagerScript.should_anchor_kind("gate_post"), "posts do not anchor")
+
+	_assert_float_eq(RimObstacleManagerScript.stack_offset(0), 0.0, "first stack is centered")
+	_assert_float_eq(RimObstacleManagerScript.stack_offset(1), 0.62, "second stack offsets right")
+	_assert_float_eq(RimObstacleManagerScript.stack_offset(2), -0.62, "third stack offsets left")
+	_assert_float_eq(RimObstacleManagerScript.stack_offset(3), 1.24, "fourth stack offsets farther")
+
+	_assert_eq(RimObstacleManagerScript.step_lane_toward(2, 5, 16), 3, "steps clockwise")
+	_assert_eq(RimObstacleManagerScript.step_lane_toward(5, 2, 16), 4, "steps anticlockwise")
+	_assert_eq(RimObstacleManagerScript.step_lane_toward(15, 1, 16), 0, "wraps forward")
+	_assert_eq(RimObstacleManagerScript.step_lane_toward(1, 15, 16), 0, "wraps backward")
+	_assert_eq(RimObstacleManagerScript.step_lane_toward(4, 4, 16), 4, "stays on target")
 
 func _test_player_fire_intent() -> void:
 	var player: StormPlayer = StormPlayerScript.new()
