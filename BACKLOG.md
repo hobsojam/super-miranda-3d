@@ -38,17 +38,14 @@ almost every system.
 
 ## Fullscreen Mode
 
-F11/Alt+Enter shortcut and a pause-menu checkbox are done. Godot's embedded
-editor preview does not support fullscreen at all, so this can only be
-verified in a real packaged build — see Windows Build Automation below for
-how to produce one.
+F11/Alt+Enter shortcut and a pause-menu checkbox are done. Confirmed
+working, HUD sizing included, in a real standalone Windows build (Godot's
+embedded editor preview can't test fullscreen at all).
 
 Still open:
 
 - Persisting the choice across sessions if project settings support it
   cleanly.
-- Confirming UI scale and tunnel framing hold up in an actual standalone
-  build, not just in theory.
 
 ## Windows Build Automation
 
