@@ -212,7 +212,10 @@ func _process(delta: float) -> void:
 		var relative: float = hazard.distance - player_distance
 		if relative < -hit_window:
 			_remove_marker(hazard)
-			_anchor_rim_obstacle(hazard)
+			if _should_anchor_hazard(hazard):
+				_anchor_rim_obstacle(hazard)
+			else:
+				hazard.cleared = true
 			continue
 		if relative < hazard_reveal_distance:
 			_ensure_marker(hazard)
@@ -963,6 +966,9 @@ func _anchor_rim_obstacle(hazard: StageHazard) -> void:
 	_storm.add_child(obstacle.marker)
 	_rim_obstacles.append(obstacle)
 	_update_rim_obstacle_pose(obstacle, _lane_stack_index(obstacle))
+
+func _should_anchor_hazard(hazard: StageHazard) -> bool:
+	return hazard.kind != "gate_field" and hazard.kind != "gate_post"
 
 func _build_obstacle_marker(kind: String) -> Node3D:
 	var marker: Node3D = _build_enemy_marker(kind)
