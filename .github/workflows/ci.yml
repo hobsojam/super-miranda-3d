@@ -37,12 +37,9 @@ jobs:
         run: |
           python -m pip install "gdtoolkit==4.*"
 
-      - name: Lint testable rules
+      - name: Lint GDScript
         run: |
-          # Keep gdtoolkit scoped to the new testable surface for now.
-          # The existing gameplay scripts need a separate formatting/config pass
-          # before full-project linting becomes useful signal.
-          gdlint tests scripts/pause_menu.gd scripts/storm_camera.gd scripts/storm_tube.gd scripts/stage_rules.gd scripts/stage_marker_factory.gd scripts/stage_hud.gd scripts/stage_one_definition.gd scripts/stage_two_definition.gd scripts/storm_player.gd scripts/stage_audio.gd scripts/rim_obstacle_manager.gd scripts/stage_hazard_runtime.gd
+          gdlint .
 
       - name: Check GDScript syntax
         run: |
