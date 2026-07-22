@@ -27,7 +27,7 @@ Pickups make firing less automatic:
 - **Purge** clears anchored rim obstacles.
 - Shooting a pickup destroys it, so sweeping every lane with fire is not always the best play.
 
-There is also a start screen, pause menu, game-over flow, stage-clear flow, test stage selection, damage flash, camera shake, and short invulnerability after taking a hit.
+There is also a start screen, pause menu, game-over flow, stage-clear flow, test stage selection, damage flash, camera shake, short invulnerability after taking a hit, and a fullscreen toggle.
 
 ## Controls
 
@@ -36,6 +36,7 @@ There is also a start screen, pause menu, game-over flow, stage-clear flow, test
 - **Space**: fire down the current lane.
 - **P**: pause or unpause.
 - **R**: restart the selected stage.
+- **F11 / Alt+Enter**: toggle fullscreen (also available as a checkbox in the pause menu).
 - **Enter / Space on menu**: start or restart from the overlay.
 
 ## Running
