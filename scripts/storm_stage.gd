@@ -34,8 +34,7 @@ var _audio: StageAudio
 var _rim_obstacles: RimObstacleManager
 var _hazards: StageHazardRuntime
 var _pickups: StagePickupRuntime
-var _bullets: Array[StageBullet] = []
-var _enemy_bolts: Array[EnemyBolt] = []
+var _projectiles: StageProjectileRuntime
 var _active_markers: Dictionary = {}
 var _pickup_markers: Dictionary = {}
 var _score: int = 0
@@ -49,17 +48,6 @@ var _pending_stage: int = 0
 var _last_stage_time_bonus: int = 0
 var _run_active: bool = false
 
-class StageBullet:
-	var lane: int
-	var distance: float
-	var start_distance: float
-	var marker: Node3D
-
-class EnemyBolt:
-	var lane: int
-	var distance: float
-	var marker: Node3D
-
 func _ready() -> void:
 	_storm = get_node(storm_path) as StormTube
 	_runner = get_node(runner_path)
@@ -70,6 +58,7 @@ func _ready() -> void:
 	_setup_hud()
 	_setup_hazards()
 	_setup_pickups()
+	_setup_projectiles()
 	_setup_rim_obstacles()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
@@ -341,6 +330,10 @@ func _setup_pickups() -> void:
 	_pickups = StagePickupRuntime.new()
 	_pickups.setup(_storm.lane_count, hit_window, hazard_reveal_distance)
 
+func _setup_projectiles() -> void:
+	_projectiles = StageProjectileRuntime.new()
+	_projectiles.setup(bullet_speed, bullet_range, pulsar_bolt_speed, hit_window)
+
 func _setup_rim_obstacles() -> void:
 	_rim_obstacles = RimObstacleManager.new()
 	_rim_obstacles.setup(_storm, _runner, flipper_hop_interval, exploder_fuse_time)
@@ -549,74 +542,44 @@ func _spawn_pickup_collect_effect(position: Vector3, kind: String) -> void:
 	tween.tween_callback(effect.queue_free)
 
 func _fire() -> void:
-	var bullet: StageBullet = StageBullet.new()
-	bullet.lane = _runner.lane_index()
-	bullet.distance = _runner.distance() + 4.0
-	bullet.start_distance = bullet.distance
-	bullet.marker = StageMarkerFactory.build_bullet_marker()
+	var bullet_marker: Node3D = StageMarkerFactory.build_bullet_marker()
+	var bullet: StageProjectileRuntime.Bullet = _projectiles.fire_bullet(
+		_runner.lane_index(),
+		_runner.distance(),
+		bullet_marker
+	)
 	_storm.add_child(bullet.marker)
-	_bullets.append(bullet)
 	_play_sfx(StageAudio.FIRE_SOUND, -7.0)
 
 func _update_bullets(delta: float) -> void:
-	for i in range(_bullets.size() - 1, -1, -1):
-		var bullet: StageBullet = _bullets[i]
-		var previous_distance: float = bullet.distance
-		bullet.distance += bullet_speed * delta
-		var hit_pickup: StagePickupRuntime.Pickup = _find_bullet_pickup(
+	for i in range(_projectiles.bullet_count() - 1, -1, -1):
+		var bullet: StageProjectileRuntime.Bullet = _projectiles.bullets()[i]
+		var previous_distance: float = _projectiles.advance_bullet(bullet, delta)
+		var hit_pickup: StagePickupRuntime.Pickup = _projectiles.find_bullet_pickup_hit(
 			bullet,
-			previous_distance
+			previous_distance,
+			_pickups.all()
 		)
-		var hit_hazard: StageHazardRuntime.Hazard = _find_bullet_hit(bullet, previous_distance)
+		var hit_hazard: StageHazardRuntime.Hazard = _projectiles.find_bullet_hazard_hit(
+			bullet,
+			previous_distance,
+			_hazards.all()
+		)
 		if hit_pickup != null and (hit_hazard == null or hit_pickup.distance <= hit_hazard.distance):
 			_destroy_pickup(hit_pickup)
 			bullet.marker.queue_free()
-			_bullets.remove_at(i)
+			_projectiles.remove_bullet(bullet)
 			continue
 		if hit_hazard != null:
 			_destroy_hazard(hit_hazard)
 			bullet.marker.queue_free()
-			_bullets.remove_at(i)
+			_projectiles.remove_bullet(bullet)
 			continue
-		if bullet.distance > minf(bullet.start_distance + bullet_range, _storm.route_length):
+		if _projectiles.bullet_expired(bullet, _storm.route_length):
 			bullet.marker.queue_free()
-			_bullets.remove_at(i)
+			_projectiles.remove_bullet(bullet)
 			continue
 		_update_bullet_pose(bullet)
-
-func _find_bullet_hit(
-	bullet: StageBullet,
-	previous_distance: float
-) -> StageHazardRuntime.Hazard:
-	var best: StageHazardRuntime.Hazard = null
-	var best_distance: float = INF
-	for hazard in _hazards.all():
-		if not hazard.spawned or hazard.cleared or hazard.lane != bullet.lane:
-			continue
-		if hazard.kind == "gate_field":
-			continue
-		if hazard.distance < previous_distance or hazard.distance > bullet.distance + hit_window:
-			continue
-		if hazard.distance < best_distance:
-			best = hazard
-			best_distance = hazard.distance
-	return best
-
-func _find_bullet_pickup(
-	bullet: StageBullet,
-	previous_distance: float
-) -> StagePickupRuntime.Pickup:
-	var best: StagePickupRuntime.Pickup = null
-	var best_distance: float = INF
-	for pickup in _pickups.all():
-		if not pickup.spawned or pickup.cleared or pickup.lane != bullet.lane:
-			continue
-		if pickup.distance < previous_distance or pickup.distance > bullet.distance + hit_window:
-			continue
-		if pickup.distance < best_distance:
-			best = pickup
-			best_distance = pickup.distance
-	return best
 
 func _destroy_hazard(hazard: StageHazardRuntime.Hazard) -> void:
 	if hazard.kind == "gate_post":
@@ -653,7 +616,7 @@ func _destroy_gate(gate_id: int, award_score: bool = true) -> void:
 			_score += 750
 			_play_sfx(StageAudio.KILL_SOUND, -3.5)
 
-func _update_bullet_pose(bullet: StageBullet) -> void:
+func _update_bullet_pose(bullet: StageProjectileRuntime.Bullet) -> void:
 	var sample: StormTube.RouteSample = _storm.sample_at_distance(bullet.distance)
 	var lane_angle: float = _runner.lane_angle_for_index(bullet.lane)
 	var radial: Vector3 = sample.right * cos(lane_angle) + sample.up * sin(lane_angle)
@@ -663,38 +626,39 @@ func _update_bullet_pose(bullet: StageBullet) -> void:
 	bullet.marker.global_basis = Basis(side, radial, -forward).orthonormalized()
 
 func _clear_bullets() -> void:
-	for bullet in _bullets:
+	for bullet in _projectiles.bullets():
 		bullet.marker.queue_free()
-	_bullets.clear()
+	_projectiles.clear_bullets()
 
 func _fire_enemy_bolt(lane: int, distance: float) -> void:
-	var bolt: EnemyBolt = EnemyBolt.new()
-	bolt.lane = lane
-	bolt.distance = distance
-	bolt.marker = StageMarkerFactory.build_enemy_bolt_marker()
+	var bolt_marker: Node3D = StageMarkerFactory.build_enemy_bolt_marker()
+	var bolt: StageProjectileRuntime.EnemyBolt = _projectiles.fire_enemy_bolt(
+		lane,
+		distance,
+		bolt_marker
+	)
 	_storm.add_child(bolt.marker)
-	_enemy_bolts.append(bolt)
 	_update_enemy_bolt_pose(bolt)
 
 func _update_enemy_bolts(delta: float, player_distance: float, player_lane: int) -> void:
-	for i in range(_enemy_bolts.size() - 1, -1, -1):
-		var bolt: EnemyBolt = _enemy_bolts[i]
-		bolt.distance -= pulsar_bolt_speed * delta
-		if bolt.distance <= player_distance + hit_window:
+	for i in range(_projectiles.enemy_bolt_count() - 1, -1, -1):
+		var bolt: StageProjectileRuntime.EnemyBolt = _projectiles.enemy_bolts()[i]
+		_projectiles.advance_enemy_bolt(bolt, delta)
+		if _projectiles.enemy_bolt_reached_player(bolt, player_distance):
 			if bolt.lane == player_lane:
 				_damage_player(StageAudio.HIT_SOUND)
 				if _game_over:
 					return
 			bolt.marker.queue_free()
-			_enemy_bolts.remove_at(i)
+			_projectiles.remove_enemy_bolt(bolt)
 			continue
-		if bolt.distance < player_distance - 40.0:
+		if _projectiles.enemy_bolt_expired_behind(bolt, player_distance):
 			bolt.marker.queue_free()
-			_enemy_bolts.remove_at(i)
+			_projectiles.remove_enemy_bolt(bolt)
 			continue
 		_update_enemy_bolt_pose(bolt)
 
-func _update_enemy_bolt_pose(bolt: EnemyBolt) -> void:
+func _update_enemy_bolt_pose(bolt: StageProjectileRuntime.EnemyBolt) -> void:
 	var sample: StormTube.RouteSample = _storm.sample_at_distance(bolt.distance)
 	var lane_angle: float = _runner.lane_angle_for_index(bolt.lane)
 	var radial: Vector3 = sample.right * cos(lane_angle) + sample.up * sin(lane_angle)
@@ -704,9 +668,9 @@ func _update_enemy_bolt_pose(bolt: EnemyBolt) -> void:
 	bolt.marker.global_basis = Basis(side, radial, forward).orthonormalized()
 
 func _clear_enemy_bolts() -> void:
-	for bolt in _enemy_bolts:
+	for bolt in _projectiles.enemy_bolts():
 		bolt.marker.queue_free()
-	_enemy_bolts.clear()
+	_projectiles.clear_enemy_bolts()
 
 func _anchor_rim_obstacle(hazard: StageHazardRuntime.Hazard) -> void:
 	if hazard.anchored or hazard.hit:
