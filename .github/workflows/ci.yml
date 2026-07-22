@@ -29,12 +29,16 @@ jobs:
           chmod +x "godot/${GODOT_BINARY}"
           echo "$PWD/godot" >> "$GITHUB_PATH"
 
+      - name: Import project resources
+        run: |
+          "${GODOT_BINARY}" --headless --path . --import
+
       - name: Check GDScript syntax
         run: |
           set -euo pipefail
           for script in scripts/*.gd; do
             echo "::group::${script}"
-            "${GODOT_BINARY}" --headless --check-only --script "${script}"
+            "${GODOT_BINARY}" --headless --path . --check-only --script "${script}"
             echo "::endgroup::"
           done
 
