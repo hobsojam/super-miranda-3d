@@ -143,6 +143,9 @@ func _process(delta: float) -> void:
 func restart_stage() -> void:
 	_start_stage(_hud.selected_start_stage)
 
+func is_menu_screen_active() -> bool:
+	return _hud != null and _hud.is_state_overlay_visible()
+
 func _start_stage(stage: int) -> void:
 	lives = 3
 	_score = 0

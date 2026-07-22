@@ -116,6 +116,9 @@ func hide_state_overlay() -> void:
 	if _state_panel:
 		_state_panel.visible = false
 
+func is_state_overlay_visible() -> bool:
+	return _state_panel != null and _state_panel.visible
+
 func should_accept_shortcut_start() -> bool:
 	return should_accept_shortcut_start_for_focus(_current_focus_owner())
 
