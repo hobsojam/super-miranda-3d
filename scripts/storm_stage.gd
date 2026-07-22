@@ -50,9 +50,11 @@ var _storm: StormTube
 var _runner: Node
 var _hud_label: Label
 var _hazards: Array[StageHazard] = []
+var _pickups: Array[StagePickup] = []
 var _bullets: Array[StageBullet] = []
 var _enemy_bolts: Array[EnemyBolt] = []
 var _active_markers: Dictionary = {}
+var _pickup_markers: Dictionary = {}
 var _rim_obstacles: Array[RimObstacle] = []
 var _base_player: AudioStreamPlayer
 var _drums_high_player: AudioStreamPlayer
@@ -100,6 +102,14 @@ class StageBullet:
 	var start_distance: float
 	var marker: Node3D
 
+class StagePickup:
+	var spawn_distance: float
+	var lane: int
+	var distance: float
+	var kind: String
+	var spawned: bool = false
+	var cleared: bool = false
+
 class EnemyBolt:
 	var lane: int
 	var distance: float
@@ -133,6 +143,7 @@ func _exit_tree() -> void:
 	if _sfx_player:
 		_sfx_player.stop()
 	_clear_markers()
+	_clear_pickup_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
@@ -159,6 +170,7 @@ func _process(delta: float) -> void:
 	var player_lane: int = _runner.lane_index()
 
 	_update_hazards(delta)
+	_update_pickups(player_distance, player_lane)
 	_update_bullets(delta)
 	_update_enemy_bolts(delta, player_distance, player_lane)
 	_update_rim_obstacles(delta, player_lane)
@@ -207,6 +219,7 @@ func _start_stage(stage: int) -> void:
 	_runner.set_input_enabled(true)
 	_runner.restart_run()
 	_clear_markers()
+	_clear_pickup_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
@@ -227,6 +240,7 @@ func _build_stage_for(stage: int) -> void:
 
 func _build_stage_one() -> void:
 	_hazards.clear()
+	_pickups.clear()
 	var pattern: Array = [
 		[720.0, 4, "flipper"], [820.0, 12, "flipper"], [930.0, 6, "flipper"],
 		[1080.0, 2, "spiker"], [1080.0, 10, "spiker"],
@@ -244,9 +258,12 @@ func _build_stage_one() -> void:
 		hazard.kind = entry[2]
 		_init_hazard_skill(hazard)
 		_hazards.append(hazard)
+	_add_pickup(1450.0, 1, "life")
+	_add_pickup(2460.0, 12, "purge")
 
 func _build_stage_two() -> void:
 	_hazards.clear()
+	_pickups.clear()
 	var pattern: Array = [
 		[650.0, 1, "flipper"], [780.0, 5, "flipper"], [910.0, 9, "flipper"], [1040.0, 13, "flipper"],
 		[1240.0, 3, "splitter"], [1240.0, 4, "splitter"], [1440.0, 11, "spiker"],
@@ -262,6 +279,16 @@ func _build_stage_two() -> void:
 		hazard.kind = entry[2]
 		_init_hazard_skill(hazard)
 		_hazards.append(hazard)
+	_add_pickup(1180.0, 8, "purge")
+	_add_pickup(2350.0, 4, "life")
+
+func _add_pickup(distance: float, lane: int, kind: String) -> void:
+	var pickup: StagePickup = StagePickup.new()
+	pickup.distance = distance
+	pickup.spawn_distance = maxf(pickup.distance - hazard_reveal_distance, 0.0)
+	pickup.lane = wrapi(lane, 0, _storm.lane_count)
+	pickup.kind = kind
+	_pickups.append(pickup)
 
 func _init_hazard_skill(hazard: StageHazard) -> void:
 	hazard.skill_ready = false
@@ -280,6 +307,31 @@ func _update_hazards(delta: float) -> void:
 		if not hazard.spawned or hazard.cleared:
 			continue
 		hazard.distance -= hazard_closing_speed * delta
+
+func _update_pickups(player_distance: float, player_lane: int) -> void:
+	for pickup in _pickups:
+		if pickup.cleared:
+			continue
+		if not pickup.spawned:
+			if player_distance >= pickup.spawn_distance:
+				_activate_pickup(pickup)
+			else:
+				continue
+		var relative: float = pickup.distance - player_distance
+		if relative < -hit_window:
+			_remove_pickup_marker(pickup)
+			pickup.cleared = true
+			continue
+		if relative < hazard_reveal_distance:
+			_ensure_pickup_marker(pickup)
+			_update_pickup_marker_pose(pickup)
+		if absf(relative) <= hit_window and pickup.lane == player_lane:
+			_collect_pickup(pickup)
+
+func _activate_pickup(pickup: StagePickup) -> void:
+	pickup.spawned = true
+	_ensure_pickup_marker(pickup)
+	_update_pickup_marker_pose(pickup)
 
 func _update_hazard_skill(hazard: StageHazard, delta: float, player_distance: float) -> void:
 	match hazard.kind:
@@ -473,6 +525,7 @@ func _advance_stage() -> void:
 	_play_sfx(CLEAR_SOUND)
 	_damage_invulnerability_timer = 0.0
 	_clear_markers()
+	_clear_pickup_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_burst_rim_obstacles()
@@ -532,6 +585,62 @@ func _clear_markers() -> void:
 		(marker as Node3D).queue_free()
 	_active_markers.clear()
 
+func _ensure_pickup_marker(pickup: StagePickup) -> void:
+	if _pickup_markers.has(pickup):
+		return
+	var marker: Node3D = _build_pickup_marker(pickup.kind)
+	_storm.add_child(marker)
+	_pickup_markers[pickup] = marker
+
+func _update_pickup_marker_pose(pickup: StagePickup) -> void:
+	var marker: Node3D = _pickup_markers[pickup] as Node3D
+	if marker == null:
+		return
+	var sample: StormTube.RouteSample = _storm.sample_at_distance(pickup.distance)
+	var lane_angle: float = _runner.lane_angle_for_index(pickup.lane)
+	var radial: Vector3 = sample.right * cos(lane_angle) + sample.up * sin(lane_angle)
+	var forward: Vector3 = sample.tangent.normalized()
+	var side: Vector3 = radial.cross(forward).normalized()
+	marker.global_position = sample.position + radial * (_storm.radius * 0.78)
+	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
+	_animate_pickup_art(marker, pickup.kind)
+
+func _remove_pickup_marker(pickup: StagePickup) -> void:
+	if not _pickup_markers.has(pickup):
+		return
+	var marker: Node3D = _pickup_markers[pickup] as Node3D
+	_pickup_markers.erase(pickup)
+	marker.queue_free()
+
+func _clear_pickup_markers() -> void:
+	for marker in _pickup_markers.values():
+		(marker as Node3D).queue_free()
+	_pickup_markers.clear()
+
+func _collect_pickup(pickup: StagePickup) -> void:
+	pickup.cleared = true
+	_remove_pickup_marker(pickup)
+	match pickup.kind:
+		"life":
+			lives += 1
+			_score += 500
+			_play_sfx(CLEAR_SOUND, -8.0)
+		"purge":
+			_score += 750
+			_purge_rim_obstacles()
+			_play_sfx(EXPLODER_SOUND, -8.0)
+
+func _destroy_pickup(pickup: StagePickup) -> void:
+	pickup.cleared = true
+	_remove_pickup_marker(pickup)
+	_play_sfx(KILL_SOUND, -12.0)
+
+func _purge_rim_obstacles() -> void:
+	for obstacle in _rim_obstacles:
+		_spawn_burst(obstacle.marker.global_position)
+		obstacle.marker.queue_free()
+	_rim_obstacles.clear()
+
 func _fire() -> void:
 	var bullet: StageBullet = StageBullet.new()
 	bullet.lane = _runner.lane_index()
@@ -547,7 +656,13 @@ func _update_bullets(delta: float) -> void:
 		var bullet: StageBullet = _bullets[i]
 		var previous_distance: float = bullet.distance
 		bullet.distance += bullet_speed * delta
+		var hit_pickup: StagePickup = _find_bullet_pickup(bullet, previous_distance)
 		var hit_hazard: StageHazard = _find_bullet_hit(bullet, previous_distance)
+		if hit_pickup != null and (hit_hazard == null or hit_pickup.distance <= hit_hazard.distance):
+			_destroy_pickup(hit_pickup)
+			bullet.marker.queue_free()
+			_bullets.remove_at(i)
+			continue
 		if hit_hazard != null:
 			_destroy_hazard(hit_hazard)
 			bullet.marker.queue_free()
@@ -570,6 +685,19 @@ func _find_bullet_hit(bullet: StageBullet, previous_distance: float) -> StageHaz
 		if hazard.distance < best_distance:
 			best = hazard
 			best_distance = hazard.distance
+	return best
+
+func _find_bullet_pickup(bullet: StageBullet, previous_distance: float) -> StagePickup:
+	var best: StagePickup = null
+	var best_distance: float = INF
+	for pickup in _pickups:
+		if not pickup.spawned or pickup.cleared or pickup.lane != bullet.lane:
+			continue
+		if pickup.distance < previous_distance or pickup.distance > bullet.distance + hit_window:
+			continue
+		if pickup.distance < best_distance:
+			best = pickup
+			best_distance = pickup.distance
 	return best
 
 func _destroy_hazard(hazard: StageHazard) -> void:
@@ -779,6 +907,7 @@ func _trigger_game_over() -> void:
 	_run_active = false
 	_runner.set_input_enabled(false)
 	_clear_markers()
+	_clear_pickup_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
@@ -860,6 +989,28 @@ func _build_enemy_marker(kind: String) -> Node3D:
 			_add_box_part(marker, Vector3(0.78, 0.08, 0.28), Vector3(0.48, 0.0, -0.32), Vector3(0.0, 0.0, -0.62), accent)
 	return marker
 
+func _build_pickup_marker(kind: String) -> Node3D:
+	var marker: Node3D = Node3D.new()
+	var material: StandardMaterial3D = _pickup_material(kind)
+	var accent: StandardMaterial3D = _pickup_accent_material(kind)
+	match kind:
+		"purge":
+			var spin: Node3D = Node3D.new()
+			spin.name = "Spin"
+			marker.add_child(spin)
+			_add_sphere_part(spin, 0.34, Vector3.ZERO, material)
+			_add_box_part(spin, Vector3(1.7, 0.08, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
+			_add_box_part(spin, Vector3(0.08, 1.7, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
+			_add_box_part(spin, Vector3(0.08, 0.08, 1.7), Vector3.ZERO, Vector3.ZERO, accent)
+		_:
+			var spin: Node3D = Node3D.new()
+			spin.name = "Spin"
+			marker.add_child(spin)
+			_add_sphere_part(spin, 0.36, Vector3.ZERO, material)
+			_add_box_part(spin, Vector3(1.32, 0.2, 0.2), Vector3.ZERO, Vector3.ZERO, accent)
+			_add_box_part(spin, Vector3(0.2, 1.32, 0.2), Vector3.ZERO, Vector3.ZERO, accent)
+	return marker
+
 func _add_box_part(parent: Node3D, size: Vector3, position: Vector3, rotation: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
 	var part: MeshInstance3D = MeshInstance3D.new()
 	var mesh: BoxMesh = BoxMesh.new()
@@ -906,6 +1057,19 @@ func _animate_enemy_art(marker: Node3D, kind: String) -> void:
 				var scale_amount: float = 1.0 + 0.13 * sin(time * 11.0)
 				pulse.scale = Vector3.ONE * scale_amount
 				pulse.rotation = Vector3(time * 1.4, time * 0.9, time * 1.8)
+
+func _animate_pickup_art(marker: Node3D, kind: String) -> void:
+	var time: float = float(Time.get_ticks_msec()) * 0.001
+	marker.scale = Vector3.ONE * (1.0 + 0.08 * sin(time * 6.5))
+	match kind:
+		"purge":
+			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
+			if spin:
+				spin.rotation = Vector3(time * 1.9, time * 2.7, time * 1.2)
+		_:
+			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
+			if spin:
+				spin.rotation.z = time * 1.6
 
 func _material_for_kind(kind: String) -> StandardMaterial3D:
 	var color: Color = Color(1.0, 0.25, 0.25)
@@ -956,6 +1120,34 @@ func _accent_material_for_kind(kind: String) -> StandardMaterial3D:
 	material.emission_enabled = true
 	material.emission = emission
 	material.emission_energy_multiplier = 3.1
+	return material
+
+func _pickup_material(kind: String) -> StandardMaterial3D:
+	var color: Color = Color(0.55, 1.0, 0.42)
+	var emission: Color = Color(0.2, 1.0, 0.16)
+	if kind == "purge":
+		color = Color(0.3, 0.95, 1.0)
+		emission = Color(0.0, 0.82, 1.0)
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = emission
+	material.emission_energy_multiplier = 3.6
+	return material
+
+func _pickup_accent_material(kind: String) -> StandardMaterial3D:
+	var color: Color = Color(0.92, 1.0, 0.72)
+	var emission: Color = Color(0.74, 1.0, 0.28)
+	if kind == "purge":
+		color = Color(0.72, 1.0, 1.0)
+		emission = Color(0.15, 1.0, 1.0)
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = emission
+	material.emission_energy_multiplier = 4.2
 	return material
 
 func _bullet_material() -> StandardMaterial3D:
