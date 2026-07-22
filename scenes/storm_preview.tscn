@@ -64,6 +64,7 @@ player_path = NodePath("../Player")
 script = ExtResource("4_stage")
 storm_path = NodePath("../Storm")
 runner_path = NodePath("../Camera3D")
+player_path = NodePath("../Player")
 hud_label_path = NodePath("../Overlay/Panel/Margin/Text")
 
 [node name="Overlay" type="CanvasLayer" parent="."]

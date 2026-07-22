@@ -5,6 +5,7 @@ const StageHudScript := preload("res://scripts/stage_hud.gd")
 const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
 const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
 const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
+const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
 
@@ -16,6 +17,7 @@ func _initialize() -> void:
 	_test_stage_hud()
 	_test_marker_factory()
 	_test_stage_definitions()
+	_test_player_fire_intent()
 
 	if _failures == 0:
 		print("All tests passed")
@@ -157,6 +159,30 @@ func _test_stage_definitions() -> void:
 		not StageTwoDefinitionScript.guide_overdraw_enabled(),
 		"stage 2 disables guide overdraw"
 	)
+
+func _test_player_fire_intent() -> void:
+	var player: StormPlayer = StormPlayerScript.new()
+	var fire_count: Array[int] = [0]
+	player.fire_cooldown = 0.5
+	player.fire_requested.connect(func() -> void: fire_count[0] += 1)
+
+	player.tick_fire_input(1.0, true)
+	_assert_eq(fire_count[0], 0, "player does not fire while disabled")
+
+	player.set_fire_enabled(true)
+	player.tick_fire_input(0.0, true)
+	_assert_eq(fire_count[0], 1, "player fires immediately when enabled")
+
+	player.tick_fire_input(0.2, true)
+	_assert_eq(fire_count[0], 1, "player respects fire cooldown")
+
+	player.tick_fire_input(0.3, true)
+	_assert_eq(fire_count[0], 2, "player fires again after cooldown")
+
+	player.set_fire_enabled(false)
+	player.tick_fire_input(0.5, true)
+	_assert_eq(fire_count[0], 2, "disabled player stops firing")
+	player.free()
 
 func _assert_eq(actual: Variant, expected: Variant, label: String) -> void:
 	if actual == expected:
