@@ -9,6 +9,7 @@ const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd
 const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd")
 const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd")
 const StagePickupRuntimeScript := preload("res://scripts/stage_pickup_runtime.gd")
+const StageProjectileRuntimeScript := preload("res://scripts/stage_projectile_runtime.gd")
 const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
@@ -25,6 +26,7 @@ func _initialize() -> void:
 	_test_rim_obstacle_rules()
 	_test_hazard_runtime()
 	_test_pickup_runtime()
+	_test_projectile_runtime()
 	_test_player_fire_intent()
 
 	if _failures == 0:
@@ -279,6 +281,66 @@ func _test_pickup_runtime() -> void:
 	_assert_true(pickup.cleared, "clears pickup")
 	runtime.clear()
 	_assert_eq(runtime.count(), 0, "clears all pickups")
+
+func _test_projectile_runtime() -> void:
+	var runtime: StageProjectileRuntime = StageProjectileRuntimeScript.new()
+	runtime.setup(140.0, 220.0, 95.0, 4.2)
+	var bullet: StageProjectileRuntime.Bullet = runtime.fire_bullet(3, 100.0, null)
+	_assert_eq(runtime.bullet_count(), 1, "adds player bullet")
+	_assert_eq(bullet.lane, 3, "records bullet lane")
+	_assert_float_eq(bullet.distance, 104.0, "starts bullet at muzzle offset")
+	_assert_float_eq(bullet.start_distance, 104.0, "records bullet start distance")
+
+	var previous_distance: float = runtime.advance_bullet(bullet, 0.5)
+	_assert_float_eq(previous_distance, 104.0, "returns previous bullet distance")
+	_assert_float_eq(bullet.distance, 174.0, "advances bullet by speed")
+	_assert_true(
+		not runtime.bullet_expired(bullet, 400.0),
+		"keeps bullet inside range and route"
+	)
+	bullet.distance = 325.0
+	_assert_true(runtime.bullet_expired(bullet, 400.0), "expires bullet after range")
+
+	var hazards: StageHazardRuntime = StageHazardRuntimeScript.new()
+	hazards.setup(16, 1000.0, 4.2, 520.0, 2.0, 1.35)
+	var gate_field: StageHazardRuntime.Hazard = hazards.add_hazard(190.0, 3, "gate_field")
+	var far_hazard: StageHazardRuntime.Hazard = hazards.add_hazard(202.0, 3, "flipper")
+	var near_hazard: StageHazardRuntime.Hazard = hazards.add_hazard(184.0, 3, "spike")
+	var wrong_lane: StageHazardRuntime.Hazard = hazards.add_hazard(176.0, 4, "flipper")
+	gate_field.spawned = true
+	far_hazard.spawned = true
+	near_hazard.spawned = true
+	wrong_lane.spawned = true
+	bullet.distance = 200.0
+	_assert_eq(
+		runtime.find_bullet_hazard_hit(bullet, 170.0, hazards.all()),
+		near_hazard,
+		"finds nearest killable hazard hit"
+	)
+
+	var pickups: StagePickupRuntime = StagePickupRuntimeScript.new()
+	pickups.setup(16, 4.2, 520.0)
+	var far_pickup: StagePickupRuntime.Pickup = pickups.add_pickup(199.0, 3, "life")
+	var near_pickup: StagePickupRuntime.Pickup = pickups.add_pickup(181.0, 3, "purge")
+	far_pickup.spawned = true
+	near_pickup.spawned = true
+	_assert_eq(
+		runtime.find_bullet_pickup_hit(bullet, 170.0, pickups.all()),
+		near_pickup,
+		"finds nearest pickup hit"
+	)
+
+	var bolt: StageProjectileRuntime.EnemyBolt = runtime.fire_enemy_bolt(2, 250.0, null)
+	_assert_eq(runtime.enemy_bolt_count(), 1, "adds enemy bolt")
+	previous_distance = runtime.advance_enemy_bolt(bolt, 1.0)
+	_assert_float_eq(previous_distance, 250.0, "returns previous enemy bolt distance")
+	_assert_float_eq(bolt.distance, 155.0, "moves enemy bolt toward player")
+	_assert_true(runtime.enemy_bolt_reached_player(bolt, 152.0), "detects enemy bolt hit window")
+	_assert_true(runtime.enemy_bolt_expired_behind(bolt, 200.0), "expires bolt behind player")
+	runtime.remove_bullet(bullet)
+	runtime.remove_enemy_bolt(bolt)
+	_assert_eq(runtime.bullet_count(), 0, "removes player bullet")
+	_assert_eq(runtime.enemy_bolt_count(), 0, "removes enemy bolt")
 
 func _test_player_fire_intent() -> void:
 	var player: StormPlayer = StormPlayerScript.new()
