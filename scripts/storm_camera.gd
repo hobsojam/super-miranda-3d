@@ -1,5 +1,5 @@
-extends Camera3D
 class_name StormRunner
+extends Camera3D
 
 const MOVE_SOUND := preload("res://audio/sfx/player_move.wav")
 
@@ -54,7 +54,11 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_DOWN):
 		_speed = max(_speed - 18.0 * delta, min_speed)
 	_update_lane_input(delta)
-	_lane_angle = lerp_angle(_lane_angle, _target_lane_angle, clampf(lane_ease_speed * delta, 0.0, 1.0))
+	_lane_angle = lerp_angle(
+		_lane_angle,
+		_target_lane_angle,
+		clampf(lane_ease_speed * delta, 0.0, 1.0)
+	)
 	_distance = min(_distance + _speed * delta, _storm.route_length)
 	_update_route_pose(delta)
 
@@ -90,7 +94,9 @@ func speed() -> float:
 func _update_route_pose(delta: float) -> void:
 	var here: StormTube.RouteSample = _storm.sample_at_distance(_distance)
 	var ahead: StormTube.RouteSample = _storm.sample_at_distance(_distance + 14.0)
-	var behind: StormTube.RouteSample = _storm.sample_at_distance(maxf(_distance - camera_distance, 0.0))
+	var behind: StormTube.RouteSample = _storm.sample_at_distance(
+		maxf(_distance - camera_distance, 0.0)
+	)
 	var radial: Vector3 = here.right * cos(_lane_angle) + here.up * sin(_lane_angle)
 	var camera_radial: Vector3 = behind.right * cos(_lane_angle) + behind.up * sin(_lane_angle)
 

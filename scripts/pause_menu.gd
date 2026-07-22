@@ -1,5 +1,5 @@
-extends CanvasLayer
 class_name PauseMenu
+extends CanvasLayer
 
 @export var panel_path: NodePath
 @export var music_slider_path: NodePath

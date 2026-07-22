@@ -1,5 +1,5 @@
-extends Node3D
 class_name StormTube
+extends Node3D
 
 ## An authored, non-branching route represented by a smooth centreline.
 ## Gameplay will eventually address the world as (lane, distance); this
@@ -57,23 +57,46 @@ func _build_route() -> void:
 	# Each point is deliberately modest in lateral displacement: the player
 	# should feel a succession of readable corners, not lose the route behind
 	# an opaque wall. It is a finite first-stage route; R restarts the preview.
-	var control_points := PackedVector3Array([
-		Vector3(0, 0, 0), Vector3(0, 0, -70), Vector3(30, 12, -145),
-		Vector3(78, -8, -220), Vector3(48, -40, -305), Vector3(-20, -28, -390),
-		Vector3(-62, 16, -480), Vector3(-24, 48, -575), Vector3(44, 22, -665),
-		Vector3(66, -24, -755), Vector3(18, -48, -850), Vector3(-35, -10, -940),
-		Vector3(-72, 28, -1040), Vector3(-18, 58, -1155), Vector3(58, 34, -1275),
-		Vector3(86, -20, -1405), Vector3(22, -60, -1540), Vector3(-54, -34, -1680),
-		Vector3(-88, 22, -1835), Vector3(-28, 66, -1990), Vector3(54, 46, -2155),
-		Vector3(92, -18, -2325), Vector3(30, -66, -2505), Vector3(-62, -38, -2685),
-		Vector3(-96, 30, -2870), Vector3(-18, 72, -3060), Vector3(68, 38, -3250)
-	])
+	var control_points := PackedVector3Array(
+		[
+			Vector3(0, 0, 0),
+			Vector3(0, 0, -70),
+			Vector3(30, 12, -145),
+			Vector3(78, -8, -220),
+			Vector3(48, -40, -305),
+			Vector3(-20, -28, -390),
+			Vector3(-62, 16, -480),
+			Vector3(-24, 48, -575),
+			Vector3(44, 22, -665),
+			Vector3(66, -24, -755),
+			Vector3(18, -48, -850),
+			Vector3(-35, -10, -940),
+			Vector3(-72, 28, -1040),
+			Vector3(-18, 58, -1155),
+			Vector3(58, 34, -1275),
+			Vector3(86, -20, -1405),
+			Vector3(22, -60, -1540),
+			Vector3(-54, -34, -1680),
+			Vector3(-88, 22, -1835),
+			Vector3(-28, 66, -1990),
+			Vector3(54, 46, -2155),
+			Vector3(92, -18, -2325),
+			Vector3(30, -66, -2505),
+			Vector3(-62, -38, -2685),
+			Vector3(-96, 30, -2870),
+			Vector3(-18, 72, -3060),
+			Vector3(68, 38, -3250),
+		]
+	)
 	var previous_right: Vector3 = Vector3.RIGHT
 	var previous_position: Vector3 = Vector3.ZERO
 	for i in ring_samples:
 		var t: float = float(i) / float(ring_samples - 1)
 		var position: Vector3 = _catmull_rom(control_points, t)
-		var tangent: Vector3 = (_catmull_rom(control_points, minf(t + 0.002, 1.0)) - _catmull_rom(control_points, maxf(t - 0.002, 0.0))).normalized()
+		var tangent: Vector3 = (
+			_catmull_rom(control_points, minf(t + 0.002, 1.0))
+			- _catmull_rom(control_points, maxf(t - 0.002, 0.0))
+		).normalized()
 		var right: Vector3 = (previous_right - tangent * previous_right.dot(tangent)).normalized()
 		if right.length_squared() < 0.001:
 			right = Vector3.UP.cross(tangent).normalized()
@@ -99,7 +122,12 @@ func _catmull_rom(points: PackedVector3Array, t: float) -> Vector3:
 	var p3: Vector3 = points[mini(i + 2, points.size() - 1)]
 	var t2: float = local_t * local_t
 	var t3: float = t2 * local_t
-	return 0.5 * ((2.0 * p1) + (-p0 + p2) * local_t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+	return 0.5 * (
+		(2.0 * p1)
+		+ (-p0 + p2) * local_t
+		+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
+	)
 
 func _build_meshes() -> void:
 	_wall = MeshInstance3D.new()
@@ -122,7 +150,10 @@ func _build_wall_mesh() -> ArrayMesh:
 			var next_lane: int = (lane + 1) % lane_count
 			var a0: float = TAU * float(lane) / float(lane_count)
 			var a1: float = TAU * float(next_lane) / float(lane_count)
-			var c: Color = Color(0.025, 0.075, 0.20).lerp(Color(0.05, 0.14, 0.34), 0.5 + 0.5 * sin(float(lane) * 1.7))
+			var c: Color = Color(0.025, 0.075, 0.20).lerp(
+				Color(0.05, 0.14, 0.34),
+				0.5 + 0.5 * sin(float(lane) * 1.7)
+			)
 			c.a = 1.0
 			var u0: float = float(lane) / float(lane_count)
 			var u1: float = float(lane + 1) / float(lane_count)
@@ -150,16 +181,37 @@ func _build_guide_mesh() -> ArrayMesh:
 	for lane in lane_count:
 		var angle: float = TAU * float(lane) / float(lane_count)
 		for row in _samples.size() - 1:
-			_add_ribbon(surface, _ring_point(_samples[row], angle), _ring_point(_samples[row + 1], angle), _samples[row].tangent, 0.075, line_color)
+			_add_ribbon(
+				surface,
+				_ring_point(_samples[row], angle),
+				_ring_point(_samples[row + 1], angle),
+				_samples[row].tangent,
+				0.075,
+				line_color
+			)
 	# Repeating hoops provide speed and make the bend legible.
 	for row in range(0, _samples.size(), guide_ring_interval):
 		for lane in lane_count:
 			var a0: float = TAU * float(lane) / float(lane_count)
 			var a1: float = TAU * float(lane + 1) / float(lane_count)
-			_add_ribbon(surface, _ring_point(_samples[row], a0), _ring_point(_samples[row], a1), _samples[row].tangent, 0.12, line_color)
+			_add_ribbon(
+				surface,
+				_ring_point(_samples[row], a0),
+				_ring_point(_samples[row], a1),
+				_samples[row].tangent,
+				0.12,
+				line_color
+			)
 	return surface.commit()
 
-func _add_quad(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, color: Color) -> void:
+func _add_quad(
+	surface: SurfaceTool,
+	a: Vector3,
+	b: Vector3,
+	c: Vector3,
+	d: Vector3,
+	color: Color
+) -> void:
 	for vertex in [a, b, c, a, c, d]:
 		surface.set_color(color)
 		surface.add_vertex(vertex)
@@ -183,7 +235,14 @@ func _add_textured_quad(
 		surface.set_uv(uvs[index])
 		surface.add_vertex(vertices[index])
 
-func _add_ribbon(surface: SurfaceTool, a: Vector3, b: Vector3, facing: Vector3, width: float, color: Color) -> void:
+func _add_ribbon(
+	surface: SurfaceTool,
+	a: Vector3,
+	b: Vector3,
+	facing: Vector3,
+	width: float,
+	color: Color
+) -> void:
 	var sideways: Vector3 = (b - a).cross(facing).normalized() * width
 	_add_quad(surface, a - sideways, b - sideways, b + sideways, a + sideways, color)
 
