@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      GODOT_VERSION: "4.4"
+      GODOT_VERSION: "4.7.1"
       GODOT_RELEASE: "stable"
-      GODOT_BINARY: Godot_v4.4-stable_linux.x86_64
+      GODOT_BINARY: Godot_v4.7.1-stable_linux.x86_64
 
     steps:
       - name: Checkout

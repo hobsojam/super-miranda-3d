@@ -7,7 +7,7 @@ open project decisions, plus setup, test, lint, and build commands. If
 
 ## Project Overview
 
-Super Miranda 3D is a Godot 4.4 lane-based arcade shooter inspired by
+Super Miranda 3D is a Godot 4.7 lane-based arcade shooter inspired by
 Tempest, framed as forward motion through a neon tunnel called the Storm.
 The player slides between 16 lanes on the rim of a fixed tube route and
 fires straight down the current lane; enemies that reach the rim without
@@ -16,7 +16,7 @@ being destroyed become anchored obstacles that grow the hazard field. See
 
 ## Setup
 
-Install Godot 4.4 (stable), GL Compatibility renderer. Open `project.godot`
+Install Godot 4.7 (stable), GL Compatibility renderer. Open `project.godot`
 directly — no addons or external package manager dependencies are
 configured. Import resources before running headless checks:
 `godot --headless --path . --import`.
