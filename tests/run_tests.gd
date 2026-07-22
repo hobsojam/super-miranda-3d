@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StageRulesScript := preload("res://scripts/stage_rules.gd")
+const StageAudioScript := preload("res://scripts/stage_audio.gd")
 const StageHudScript := preload("res://scripts/stage_hud.gd")
 const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
 const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
@@ -12,6 +13,7 @@ var _failures: int = 0
 func _initialize() -> void:
 	_test_stage_time_formatting()
 	_test_stage_time_bonus()
+	_test_stage_audio()
 	_test_gate_lanes()
 	_test_anchor_decay()
 	_test_stage_hud()
@@ -40,6 +42,25 @@ func _test_stage_time_bonus() -> void:
 	_assert_eq(StageRulesScript.stage_clear_time_bonus(90.0), 2500, "awards half time bonus")
 	_assert_eq(StageRulesScript.stage_clear_time_bonus(180.0), 0, "awards no bonus at target time")
 	_assert_eq(StageRulesScript.stage_clear_time_bonus(220.0), 0, "does not penalize slow clears")
+
+func _test_stage_audio() -> void:
+	_assert_eq(StageAudioScript.music_stage_for(1), 1, "uses stage 1 music for stage 1")
+	_assert_eq(StageAudioScript.music_stage_for(2), 2, "uses stage 2 music for stage 2")
+	_assert_eq(StageAudioScript.music_stage_for(99), 2, "caps music lookup at stage 2")
+	_assert_float_eq(StageAudioScript.target_intensity(0, 0, 5), 0.0, "low pressure is quiet")
+	_assert_float_eq(StageAudioScript.target_intensity(3, 0, 6), 0.5, "middle pressure blends")
+	_assert_float_eq(StageAudioScript.target_intensity(8, 0, 5), 1.0, "high pressure caps")
+	_assert_float_eq(StageAudioScript.target_intensity(5, 5, 5), 0.0, "invalid span is quiet")
+	_assert_float_eq(
+		StageAudioScript.damage_sound_volume(StageAudioScript.EXPLODER_SOUND),
+		-5.0,
+		"exploder damage is louder"
+	)
+	_assert_float_eq(
+		StageAudioScript.damage_sound_volume(StageAudioScript.HIT_SOUND),
+		-7.0,
+		"regular damage is quieter"
+	)
 
 func _test_gate_lanes() -> void:
 	var straight: Array[Dictionary] = StageRulesScript.gate_lanes(0, 4, 16)
