@@ -32,7 +32,7 @@ var _hud_label: Label
 var _hud: StageHud
 var _audio: StageAudio
 var _rim_obstacles: RimObstacleManager
-var _hazards: Array[StageHazard] = []
+var _hazards: StageHazardRuntime
 var _pickups: Array[StagePickup] = []
 var _bullets: Array[StageBullet] = []
 var _enemy_bolts: Array[EnemyBolt] = []
@@ -48,22 +48,6 @@ var _stage_transition_timer: float = 0.0
 var _pending_stage: int = 0
 var _last_stage_time_bonus: int = 0
 var _run_active: bool = false
-
-class StageHazard:
-	var spawn_distance: float
-	var lane: int
-	var distance: float
-	var kind: String
-	var spawned: bool = false
-	var cleared: bool = false
-	var hit: bool = false
-	var anchored: bool = false
-	var skill_ready: bool = false
-	var pulse_timer: float = 0.0
-	var spike_drop_meter: float = 0.0
-	var spiker_lane_timer: float = 0.0
-	var spiker_lane_direction: int = 1
-	var gate_id: int = -1
 
 class StageBullet:
 	var lane: int
@@ -92,6 +76,7 @@ func _ready() -> void:
 	_player.fire_requested.connect(_on_player_fire_requested)
 	_setup_audio()
 	_setup_hud()
+	_setup_hazards()
 	_setup_rim_obstacles()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
@@ -143,23 +128,23 @@ func _process(delta: float) -> void:
 	_update_rim_obstacles(delta, player_lane)
 	_check_rim_obstacle_collision(player_lane)
 
-	for hazard in _hazards:
+	for hazard in _hazards.all():
 		if hazard.cleared:
 			continue
 		if not hazard.spawned:
-			if player_distance >= hazard.spawn_distance:
+			if _hazards.should_activate(hazard, player_distance):
 				_activate_hazard(hazard)
 			else:
 				continue
 		var relative: float = hazard.distance - player_distance
-		if relative < -hit_window:
+		if _hazards.has_passed_player(hazard, player_distance):
 			_remove_marker(hazard)
 			if RimObstacleManager.should_anchor_kind(hazard.kind):
 				_anchor_rim_obstacle(hazard)
 			else:
 				hazard.cleared = true
 			continue
-		if relative < hazard_reveal_distance:
+		if _hazards.should_show(hazard, player_distance):
 			_ensure_marker(hazard)
 			_update_hazard_skill(hazard, delta, player_distance)
 			if hazard.cleared:
@@ -247,22 +232,16 @@ func _stage_guide_overdraw_enabled(stage: int) -> bool:
 		return StageTwoDefinition.guide_overdraw_enabled()
 	return StageOneDefinition.guide_overdraw_enabled()
 
-func _add_stage_hazard(distance: float, lane: int, kind: String, gate_id: int = -1) -> StageHazard:
-	if distance >= _stage_end_distance() - hit_window:
-		return null
-	var hazard: StageHazard = StageHazard.new()
-	hazard.distance = distance
-	hazard.spawn_distance = maxf(hazard.distance - hazard_reveal_distance, 0.0)
-	hazard.lane = wrapi(lane, 0, _storm.lane_count)
-	hazard.kind = kind
-	hazard.gate_id = gate_id
-	_init_hazard_skill(hazard)
-	_hazards.append(hazard)
-	return hazard
+func _add_stage_hazard(
+	distance: float,
+	lane: int,
+	kind: String,
+	gate_id: int = -1
+) -> StageHazardRuntime.Hazard:
+	return _hazards.add_hazard(distance, lane, kind, gate_id)
 
 func _add_gate_pair(distance: float, start_lane: int, end_lane: int, gate_id: int) -> void:
-	for gate_part in StageRules.gate_lanes(start_lane, end_lane, _storm.lane_count):
-		_add_stage_hazard(distance, gate_part["lane"], gate_part["kind"], gate_id)
+	_hazards.add_gate_pair(distance, start_lane, end_lane, gate_id)
 
 func _add_pickup(distance: float, lane: int, kind: String) -> void:
 	var pickup: StagePickup = StagePickup.new()
@@ -272,23 +251,13 @@ func _add_pickup(distance: float, lane: int, kind: String) -> void:
 	pickup.kind = kind
 	_pickups.append(pickup)
 
-func _init_hazard_skill(hazard: StageHazard) -> void:
-	hazard.skill_ready = false
-	hazard.pulse_timer = pulsar_fire_interval
-	hazard.spike_drop_meter = 0.0
-	hazard.spiker_lane_timer = spiker_lane_step_interval
-	hazard.spiker_lane_direction = 1 if hazard.lane % 2 == 0 else -1
-
-func _activate_hazard(hazard: StageHazard) -> void:
+func _activate_hazard(hazard: StageHazardRuntime.Hazard) -> void:
 	hazard.spawned = true
 	_ensure_marker(hazard)
 	_update_marker_pose(hazard)
 
 func _update_hazards(delta: float) -> void:
-	for hazard in _hazards:
-		if not hazard.spawned or hazard.cleared:
-			continue
-		hazard.distance -= hazard_closing_speed * delta
+	_hazards.update_closing(delta, hazard_closing_speed)
 
 func _update_pickups(player_distance: float, player_lane: int) -> void:
 	for pickup in _pickups:
@@ -315,14 +284,22 @@ func _activate_pickup(pickup: StagePickup) -> void:
 	_ensure_pickup_marker(pickup)
 	_update_pickup_marker_pose(pickup)
 
-func _update_hazard_skill(hazard: StageHazard, delta: float, player_distance: float) -> void:
+func _update_hazard_skill(
+	hazard: StageHazardRuntime.Hazard,
+	delta: float,
+	player_distance: float
+) -> void:
 	match hazard.kind:
 		"spiker":
 			_update_spiker(hazard, delta, player_distance)
 		"pulsar":
 			_update_pulsar(hazard, delta)
 
-func _update_spiker(hazard: StageHazard, delta: float, player_distance: float) -> void:
+func _update_spiker(
+	hazard: StageHazardRuntime.Hazard,
+	delta: float,
+	player_distance: float
+) -> void:
 	var travel: float = spiker_retreat_speed * delta
 	hazard.distance += travel
 	if hazard.distance >= _stage_end_distance() - hit_window:
@@ -341,25 +318,15 @@ func _update_spiker(hazard: StageHazard, delta: float, player_distance: float) -
 		if drop_distance > player_distance + hit_window:
 			_spawn_hazard(drop_distance, hazard.lane, "spike")
 
-func _update_pulsar(hazard: StageHazard, delta: float) -> void:
+func _update_pulsar(hazard: StageHazardRuntime.Hazard, delta: float) -> void:
 	hazard.pulse_timer -= delta
 	if hazard.pulse_timer > 0.0:
 		return
 	hazard.pulse_timer = pulsar_fire_interval
 	_fire_enemy_bolt(hazard.lane, hazard.distance)
 
-func _spawn_hazard(distance: float, lane: int, kind: String) -> StageHazard:
-	if distance >= _stage_end_distance() - hit_window:
-		return null
-	var hazard: StageHazard = StageHazard.new()
-	hazard.distance = distance
-	hazard.spawn_distance = maxf(hazard.distance - hazard_reveal_distance, 0.0)
-	hazard.lane = wrapi(lane, 0, _storm.lane_count)
-	hazard.kind = kind
-	hazard.spawned = true
-	_init_hazard_skill(hazard)
-	_hazards.append(hazard)
-	return hazard
+func _spawn_hazard(distance: float, lane: int, kind: String) -> StageHazardRuntime.Hazard:
+	return _hazards.spawn_hazard(distance, lane, kind)
 
 func _stage_end_distance() -> float:
 	return maxf(_storm.route_length, 1.0)
@@ -371,6 +338,17 @@ func _setup_hud() -> void:
 	_hud.start_pressed.connect(_start_game)
 	_hud.exit_pressed.connect(_on_hud_exit_pressed)
 	_hud.stage_selected.connect(_on_hud_stage_selected)
+
+func _setup_hazards() -> void:
+	_hazards = StageHazardRuntime.new()
+	_hazards.setup(
+		_storm.lane_count,
+		_stage_end_distance(),
+		hit_window,
+		hazard_reveal_distance,
+		pulsar_fire_interval,
+		spiker_lane_step_interval
+	)
 
 func _setup_rim_obstacles() -> void:
 	_rim_obstacles = RimObstacleManager.new()
@@ -400,7 +378,7 @@ func _advance_stage() -> void:
 	_clear_enemy_bolts()
 	_burst_rim_obstacles()
 	_clear_rim_obstacles()
-	for hazard in _hazards:
+	for hazard in _hazards.all():
 		hazard.cleared = true
 	if next_stage == 2:
 		_pending_stage = next_stage
@@ -449,14 +427,14 @@ func _format_stage_time(seconds: float) -> String:
 func _stage_clear_time_bonus(seconds: float) -> int:
 	return StageRules.stage_clear_time_bonus(seconds)
 
-func _ensure_marker(hazard: StageHazard) -> void:
+func _ensure_marker(hazard: StageHazardRuntime.Hazard) -> void:
 	if _active_markers.has(hazard):
 		return
 	var marker: Node3D = StageMarkerFactory.build_enemy_marker(hazard.kind)
 	_storm.add_child(marker)
 	_active_markers[hazard] = marker
 
-func _update_marker_pose(hazard: StageHazard) -> void:
+func _update_marker_pose(hazard: StageHazardRuntime.Hazard) -> void:
 	var marker: Node3D = _active_markers[hazard] as Node3D
 	if marker == null:
 		return
@@ -469,7 +447,7 @@ func _update_marker_pose(hazard: StageHazard) -> void:
 	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
 	StageMarkerFactory.animate_enemy_art(marker, hazard.kind)
 
-func _hit_player(hazard: StageHazard) -> void:
+func _hit_player(hazard: StageHazardRuntime.Hazard) -> void:
 	if hazard.kind == "gate_field":
 		_damage_player(StageAudio.HIT_SOUND)
 		return
@@ -485,7 +463,7 @@ func _hit_player(hazard: StageHazard) -> void:
 		StageAudio.EXPLODER_SOUND if hazard.kind == "exploder" else StageAudio.HIT_SOUND
 	)
 
-func _remove_marker(hazard: StageHazard) -> void:
+func _remove_marker(hazard: StageHazardRuntime.Hazard) -> void:
 	if not _active_markers.has(hazard):
 		return
 	var marker: Node3D = _active_markers[hazard] as Node3D
@@ -591,7 +569,7 @@ func _update_bullets(delta: float) -> void:
 		var previous_distance: float = bullet.distance
 		bullet.distance += bullet_speed * delta
 		var hit_pickup: StagePickup = _find_bullet_pickup(bullet, previous_distance)
-		var hit_hazard: StageHazard = _find_bullet_hit(bullet, previous_distance)
+		var hit_hazard: StageHazardRuntime.Hazard = _find_bullet_hit(bullet, previous_distance)
 		if hit_pickup != null and (hit_hazard == null or hit_pickup.distance <= hit_hazard.distance):
 			_destroy_pickup(hit_pickup)
 			bullet.marker.queue_free()
@@ -608,10 +586,13 @@ func _update_bullets(delta: float) -> void:
 			continue
 		_update_bullet_pose(bullet)
 
-func _find_bullet_hit(bullet: StageBullet, previous_distance: float) -> StageHazard:
-	var best: StageHazard = null
+func _find_bullet_hit(
+	bullet: StageBullet,
+	previous_distance: float
+) -> StageHazardRuntime.Hazard:
+	var best: StageHazardRuntime.Hazard = null
 	var best_distance: float = INF
-	for hazard in _hazards:
+	for hazard in _hazards.all():
 		if not hazard.spawned or hazard.cleared or hazard.lane != bullet.lane:
 			continue
 		if hazard.kind == "gate_field":
@@ -636,7 +617,7 @@ func _find_bullet_pickup(bullet: StageBullet, previous_distance: float) -> Stage
 			best_distance = pickup.distance
 	return best
 
-func _destroy_hazard(hazard: StageHazard) -> void:
+func _destroy_hazard(hazard: StageHazardRuntime.Hazard) -> void:
 	if hazard.kind == "gate_post":
 		_destroy_gate(hazard.gate_id)
 		return
@@ -657,7 +638,7 @@ func _destroy_gate(gate_id: int, award_score: bool = true) -> void:
 	if gate_id < 0:
 		return
 	var destroyed: bool = false
-	for hazard in _hazards:
+	for hazard in _hazards.all():
 		if hazard.gate_id != gate_id or hazard.cleared:
 			continue
 		hazard.cleared = true
@@ -726,7 +707,7 @@ func _clear_enemy_bolts() -> void:
 		bolt.marker.queue_free()
 	_enemy_bolts.clear()
 
-func _anchor_rim_obstacle(hazard: StageHazard) -> void:
+func _anchor_rim_obstacle(hazard: StageHazardRuntime.Hazard) -> void:
 	if hazard.anchored or hazard.hit:
 		return
 	hazard.anchored = true
@@ -807,9 +788,7 @@ func _setup_audio() -> void:
 
 func _update_music_intensity(delta: float) -> void:
 	var active_pressure: int = _rim_obstacles.count()
-	for hazard in _hazards:
-		if hazard.spawned and not hazard.cleared and hazard.distance - _runner.distance() < hazard_reveal_distance:
-			active_pressure += 1
+	active_pressure += _hazards.active_pressure(_runner.distance())
 	_audio.update_music_intensity(
 		delta,
 		active_pressure,
@@ -826,7 +805,7 @@ func _update_hud() -> void:
 	var distance: int = int(_runner.distance())
 	var speed: int = int(_runner.speed())
 	var active_hazards: int = 0
-	for hazard in _hazards:
+	for hazard in _hazards.all():
 		if hazard.spawned and not hazard.cleared:
 			active_hazards += 1
 	var status: String = ""

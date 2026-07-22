@@ -7,6 +7,7 @@ const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd
 const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
 const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
 const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd")
+const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd")
 const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
@@ -21,6 +22,7 @@ func _initialize() -> void:
 	_test_marker_factory()
 	_test_stage_definitions()
 	_test_rim_obstacle_rules()
+	_test_hazard_runtime()
 	_test_player_fire_intent()
 
 	if _failures == 0:
@@ -198,6 +200,37 @@ func _test_rim_obstacle_rules() -> void:
 	_assert_eq(RimObstacleManagerScript.step_lane_toward(15, 1, 16), 0, "wraps forward")
 	_assert_eq(RimObstacleManagerScript.step_lane_toward(1, 15, 16), 0, "wraps backward")
 	_assert_eq(RimObstacleManagerScript.step_lane_toward(4, 4, 16), 4, "stays on target")
+
+func _test_hazard_runtime() -> void:
+	_assert_float_eq(
+		StageHazardRuntimeScript.spawn_distance_for(720.0, 520.0),
+		200.0,
+		"spawn distance uses reveal distance"
+	)
+	_assert_float_eq(
+		StageHazardRuntimeScript.spawn_distance_for(120.0, 520.0),
+		0.0,
+		"spawn distance clamps to stage start"
+	)
+	_assert_true(
+		StageHazardRuntimeScript.should_reject_spawn(996.0, 1000.0, 4.2),
+		"rejects hazards inside end hit window"
+	)
+	_assert_true(
+		not StageHazardRuntimeScript.should_reject_spawn(990.0, 1000.0, 4.2),
+		"accepts hazards before end hit window"
+	)
+
+	var runtime: StageHazardRuntime = StageHazardRuntimeScript.new()
+	runtime.setup(16, 1000.0, 4.2, 520.0, 2.0, 1.35)
+	var hazard: StageHazardRuntime.Hazard = runtime.add_hazard(720.0, -1, "flipper")
+	_assert_eq(runtime.count(), 1, "adds accepted hazard")
+	_assert_eq(hazard.lane, 15, "wraps hazard lane")
+	_assert_eq(hazard.spawn_distance, 200.0, "records hazard spawn distance")
+	_assert_true(runtime.should_activate(hazard, 200.0), "activates at spawn distance")
+	_assert_true(runtime.should_show(hazard, 201.0), "shows inside reveal distance")
+	_assert_true(runtime.has_passed_player(hazard, 725.0), "detects passed hazard")
+	_assert_eq(runtime.spawn_hazard(998.0, 1, "spike"), null, "rejects spawned hazard near end")
 
 func _test_player_fire_intent() -> void:
 	var player: StormPlayer = StormPlayerScript.new()
