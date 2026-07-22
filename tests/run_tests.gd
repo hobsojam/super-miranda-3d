@@ -3,6 +3,8 @@ extends SceneTree
 const StageRulesScript := preload("res://scripts/stage_rules.gd")
 const StageHudScript := preload("res://scripts/stage_hud.gd")
 const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
+const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
+const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
 
 var _failures: int = 0
 
@@ -13,6 +15,7 @@ func _initialize() -> void:
 	_test_anchor_decay()
 	_test_stage_hud()
 	_test_marker_factory()
+	_test_stage_definitions()
 
 	if _failures == 0:
 		print("All tests passed")
@@ -125,6 +128,36 @@ func _test_marker_factory() -> void:
 	)
 	bullet.free()
 
+func _test_stage_definitions() -> void:
+	var stage_one_hazards: Array[Dictionary] = StageOneDefinitionScript.hazards()
+	var stage_one_pickups: Array[Dictionary] = StageOneDefinitionScript.pickups()
+	_assert_eq(stage_one_hazards.size(), 24, "stage 1 hazard count is preserved")
+	_assert_eq(stage_one_hazards[0], _hazard(720.0, 4, "flipper"), "stage 1 first hazard")
+	_assert_eq(stage_one_hazards[-1], _hazard(3640.0, 2, "exploder"), "stage 1 final hazard")
+	_assert_eq(
+		stage_one_pickups,
+		[_pickup(1360.0, 6, "purge"), _pickup(1450.0, 1, "life")],
+		"stage 1 pickups"
+	)
+	_assert_true(StageOneDefinitionScript.guide_overdraw_enabled(), "stage 1 keeps guide overdraw")
+
+	var stage_two_hazards: Array[Dictionary] = StageTwoDefinitionScript.hazards()
+	var stage_two_pickups: Array[Dictionary] = StageTwoDefinitionScript.pickups()
+	var stage_two_gates: Array[Dictionary] = StageTwoDefinitionScript.gate_pairs()
+	_assert_eq(stage_two_hazards.size(), 14, "stage 2 hazard count is preserved")
+	_assert_eq(stage_two_hazards[0], _hazard(650.0, 1, "flipper"), "stage 2 first hazard")
+	_assert_eq(stage_two_gates[0], _gate_pair(3260.0, 0, 4, 1), "stage 2 first gate")
+	_assert_eq(stage_two_gates[-1], _gate_pair(3620.0, 5, 10, 5), "stage 2 final gate")
+	_assert_eq(
+		stage_two_pickups,
+		[_pickup(1340.0, 4, "purge"), _pickup(2350.0, 4, "life")],
+		"stage 2 pickups"
+	)
+	_assert_true(
+		not StageTwoDefinitionScript.guide_overdraw_enabled(),
+		"stage 2 disables guide overdraw"
+	)
+
 func _assert_eq(actual: Variant, expected: Variant, label: String) -> void:
 	if actual == expected:
 		return
@@ -157,3 +190,17 @@ func _first_material(node: Node) -> StandardMaterial3D:
 		if material != null:
 			return material
 	return null
+
+func _hazard(distance: float, lane: int, kind: String) -> Dictionary:
+	return {"distance": distance, "lane": lane, "kind": kind}
+
+func _pickup(distance: float, lane: int, kind: String) -> Dictionary:
+	return {"distance": distance, "lane": lane, "kind": kind}
+
+func _gate_pair(distance: float, start_lane: int, end_lane: int, gate_id: int) -> Dictionary:
+	return {
+		"distance": distance,
+		"start_lane": start_lane,
+		"end_lane": end_lane,
+		"gate_id": gate_id,
+	}
