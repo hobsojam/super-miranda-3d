@@ -74,8 +74,10 @@ var _state_layer: CanvasLayer
 var _state_panel: Control
 var _state_title: Label
 var _state_body: Label
+var _stage_selector: OptionButton
 var _state_primary_button: Button
 var _state_secondary_button: Button
+var _selected_start_stage: int = 1
 
 class StageHazard:
 	var spawn_distance: float
@@ -116,7 +118,7 @@ func _ready() -> void:
 	_hud_label = get_node(hud_label_path) as Label
 	_setup_audio()
 	_setup_state_overlay()
-	_build_stage_one()
+	_build_stage_for(1)
 	_runner.set_input_enabled(false)
 	_show_start_screen()
 	_update_hud()
@@ -190,9 +192,13 @@ func _process(delta: float) -> void:
 	_update_hud()
 
 func restart_stage() -> void:
+	_start_stage(_selected_start_stage)
+
+func _start_stage(stage: int) -> void:
 	lives = 3
 	_score = 0
-	_stage = 1
+	_stage = clampi(stage, 1, 2)
+	_selected_start_stage = _stage
 	_game_over = false
 	_game_complete = false
 	_run_active = true
@@ -204,14 +210,20 @@ func restart_stage() -> void:
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
-	_build_stage_one()
-	_storm.set_guide_overdraw_enabled(true)
-	_load_music_stage(1)
+	_build_stage_for(_stage)
+	_storm.set_guide_overdraw_enabled(_stage == 1)
+	_load_music_stage(_stage)
 	_hide_state_overlay()
 	_update_hud()
 
 func _start_game() -> void:
-	restart_stage()
+	_start_stage(_selected_start_stage)
+
+func _build_stage_for(stage: int) -> void:
+	if stage == 2:
+		_build_stage_two()
+		return
+	_build_stage_one()
 
 func _build_stage_one() -> void:
 	_hazards.clear()
@@ -364,6 +376,23 @@ func _setup_state_overlay() -> void:
 	_state_body.add_theme_font_size_override("font_size", 16)
 	box.add_child(_state_body)
 
+	var selector_row: HBoxContainer = HBoxContainer.new()
+	selector_row.add_theme_constant_override("separation", 12)
+	box.add_child(selector_row)
+
+	var selector_label: Label = Label.new()
+	selector_label.custom_minimum_size = Vector2(86.0, 0.0)
+	selector_label.add_theme_color_override("font_color", Color(0.78, 0.92, 1.0))
+	selector_label.text = "Stage"
+	selector_row.add_child(selector_label)
+
+	_stage_selector = OptionButton.new()
+	_stage_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stage_selector.add_item("Stage 1", 1)
+	_stage_selector.add_item("Stage 2", 2)
+	_stage_selector.item_selected.connect(_on_stage_selected)
+	selector_row.add_child(_stage_selector)
+
 	_state_primary_button = Button.new()
 	_state_primary_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_state_primary_button.pressed.connect(_start_game)
@@ -392,22 +421,27 @@ func _state_panel_style() -> StyleBoxFlat:
 func _show_start_screen() -> void:
 	_run_active = false
 	_state_title.text = "MIRANDA"
-	_state_body.text = "Stage 1"
+	_state_body.text = "Choose starting stage"
 	_state_primary_button.text = "Start"
+	_sync_stage_selector()
 	_state_panel.visible = true
 	_state_primary_button.grab_focus()
 
 func _show_game_over_screen() -> void:
+	_selected_start_stage = _stage
 	_state_title.text = "GAME OVER"
 	_state_body.text = "Score %04d    Stage %d" % [_score, _stage]
 	_state_primary_button.text = "Restart"
+	_sync_stage_selector()
 	_state_panel.visible = true
 	_state_primary_button.grab_focus()
 
 func _show_complete_screen() -> void:
+	_selected_start_stage = 1
 	_state_title.text = "STORM CLEAR"
 	_state_body.text = "Score %04d" % _score
 	_state_primary_button.text = "Restart"
+	_sync_stage_selector()
 	_state_panel.visible = true
 	_state_primary_button.grab_focus()
 
@@ -417,6 +451,23 @@ func _hide_state_overlay() -> void:
 
 func _on_state_exit_pressed() -> void:
 	get_tree().quit()
+
+func _on_stage_selected(index: int) -> void:
+	_selected_start_stage = _stage_selector.get_item_id(index)
+	if not _run_active:
+		_stage = _selected_start_stage
+		_storm.set_guide_overdraw_enabled(_stage == 1)
+		_load_music_stage(_stage)
+		_build_stage_for(_stage)
+		_update_hud()
+
+func _sync_stage_selector() -> void:
+	if _stage_selector == null:
+		return
+	for index in range(_stage_selector.item_count):
+		if _stage_selector.get_item_id(index) == _selected_start_stage:
+			_stage_selector.select(index)
+			return
 
 func _advance_stage() -> void:
 	_play_sfx(CLEAR_SOUND)
