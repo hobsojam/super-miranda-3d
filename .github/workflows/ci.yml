@@ -33,14 +33,29 @@ jobs:
         run: |
           "${GODOT_BINARY}" --headless --path . --import
 
+      - name: Install GDScript lint tools
+        run: |
+          python -m pip install "gdtoolkit==4.*"
+
+      - name: Lint testable rules
+        run: |
+          # Keep gdtoolkit scoped to the new testable surface for now.
+          # The existing gameplay scripts need a separate formatting/config pass
+          # before full-project linting becomes useful signal.
+          gdlint tests scripts/stage_rules.gd
+
       - name: Check GDScript syntax
         run: |
           set -euo pipefail
-          for script in scripts/*.gd; do
+          for script in scripts/*.gd tests/*.gd; do
             echo "::group::${script}"
             "${GODOT_BINARY}" --headless --path . --check-only --script "${script}"
             echo "::endgroup::"
           done
+
+      - name: Run unit tests
+        run: |
+          "${GODOT_BINARY}" --headless --path . --script tests/run_tests.gd
 
       - name: Smoke load project
         run: |

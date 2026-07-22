@@ -25,11 +25,6 @@ const GAME_OVER_SOUND := preload("res://audio/sfx/game_over.wav")
 const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
 const HUD_NOTICE_TIME := 1.15
 const STAGE_TRANSITION_TIME := 1.85
-const STAGE_TARGET_TIME := 180.0
-const STAGE_TIME_BONUS := 5000
-const ANCHOR_DECAY_MIN_SPEED := 22.0
-const ANCHOR_DECAY_MAX_SPEED := 55.0
-const ANCHOR_DECAY_TIME_FAST := 3.5
 
 @export var storm_path: NodePath
 @export var runner_path: NodePath
@@ -326,13 +321,8 @@ func _add_stage_hazard(distance: float, lane: int, kind: String, gate_id: int = 
 	return hazard
 
 func _add_gate_pair(distance: float, start_lane: int, end_lane: int, gate_id: int) -> void:
-	var count: int = _storm.lane_count
-	var lane: int = wrapi(start_lane, 0, count)
-	var end: int = wrapi(end_lane, 0, count)
-	_add_stage_hazard(distance, lane, "gate_post", gate_id)
-	while lane != end:
-		lane = wrapi(lane + 1, 0, count)
-		_add_stage_hazard(distance, lane, "gate_post" if lane == end else "gate_field", gate_id)
+	for gate_part in StageRules.gate_lanes(start_lane, end_lane, _storm.lane_count):
+		_add_stage_hazard(distance, gate_part["lane"], gate_part["kind"], gate_id)
 
 func _add_pickup(distance: float, lane: int, kind: String) -> void:
 	var pickup: StagePickup = StagePickup.new()
@@ -640,15 +630,10 @@ func _continue_to_pending_stage() -> void:
 	_hide_state_overlay()
 
 func _format_stage_time(seconds: float) -> String:
-	var total_tenths: int = int(roundf(seconds * 10.0))
-	var minutes: int = int(float(total_tenths) / 600.0)
-	var seconds_part: int = int(float(total_tenths - minutes * 600) / 10.0)
-	var tenths: int = total_tenths % 10
-	return "%02d:%02d.%d" % [minutes, seconds_part, tenths]
+	return StageRules.format_stage_time(seconds)
 
 func _stage_clear_time_bonus(seconds: float) -> int:
-	var ratio: float = clampf((STAGE_TARGET_TIME - seconds) / STAGE_TARGET_TIME, 0.0, 1.0)
-	return int(roundf(ratio * float(STAGE_TIME_BONUS) / 50.0)) * 50
+	return StageRules.stage_clear_time_bonus(seconds)
 
 func _ensure_marker(hazard: StageHazard) -> void:
 	if _active_markers.has(hazard):
@@ -1000,10 +985,10 @@ func _update_rim_obstacles(delta: float, player_lane: int) -> void:
 		_update_rim_obstacle_pose(obstacle, _lane_stack_index(obstacle))
 
 func _decay_anchor_obstacle(obstacle: RimObstacle, delta: float) -> bool:
-	var speed_factor: float = clampf((_runner.speed() - ANCHOR_DECAY_MIN_SPEED) / (ANCHOR_DECAY_MAX_SPEED - ANCHOR_DECAY_MIN_SPEED), 0.0, 1.0)
-	if speed_factor <= 0.0:
+	var decay: float = StageRules.anchor_decay_amount(_runner.speed(), delta)
+	if decay <= 0.0:
 		return false
-	obstacle.stability -= delta * speed_factor / ANCHOR_DECAY_TIME_FAST
+	obstacle.stability -= decay
 	var pulse_scale: float = 1.0 + (1.0 - obstacle.stability) * 0.18
 	obstacle.marker.scale = Vector3.ONE * 1.15 * pulse_scale
 	if obstacle.stability > 0.0:
