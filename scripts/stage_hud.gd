@@ -116,6 +116,26 @@ func hide_state_overlay() -> void:
 	if _state_panel:
 		_state_panel.visible = false
 
+func should_accept_shortcut_start() -> bool:
+	return should_accept_shortcut_start_for_focus(_current_focus_owner())
+
+func should_accept_shortcut_start_for_focus(focus_owner: Control) -> bool:
+	return not has_state_control_focus_owner(focus_owner)
+
+func has_state_control_focus() -> bool:
+	return has_state_control_focus_owner(_current_focus_owner())
+
+func has_state_control_focus_owner(focus_owner: Control) -> bool:
+	if _state_panel == null or not _state_panel.visible:
+		return false
+	return focus_owner != null and _state_panel.is_ancestor_of(focus_owner)
+
+func _current_focus_owner() -> Control:
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return null
+	return viewport.gui_get_focus_owner()
+
 func update_status(
 	stage: int,
 	distance: int,
@@ -195,6 +215,7 @@ func _build_state_overlay() -> void:
 	selector_row.add_child(selector_label)
 
 	_stage_selector = OptionButton.new()
+	_stage_selector.name = "StageSelector"
 	_stage_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stage_selector.add_item("Stage 1", 1)
 	_stage_selector.add_item("Stage 2", 2)
@@ -202,11 +223,13 @@ func _build_state_overlay() -> void:
 	selector_row.add_child(_stage_selector)
 
 	_state_primary_button = Button.new()
+	_state_primary_button.name = "PrimaryButton"
 	_state_primary_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_state_primary_button.pressed.connect(func() -> void: start_pressed.emit())
 	box.add_child(_state_primary_button)
 
 	_state_secondary_button = Button.new()
+	_state_secondary_button.name = "ExitButton"
 	_state_secondary_button.custom_minimum_size = Vector2(0.0, 34.0)
 	_state_secondary_button.text = "Exit"
 	_state_secondary_button.pressed.connect(func() -> void: exit_pressed.emit())
