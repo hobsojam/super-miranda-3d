@@ -1,28 +1,6 @@
 extends Node
 class_name StormStage
 
-const STAGE_MUSIC := {
-	1: {
-		"base_a": "res://audio/music/stage1_base_a.wav",
-		"base_b": "res://audio/music/stage1_base_b.wav",
-		"drums_high_a": "res://audio/music/stage1_drums_breakbeat_dnb.wav",
-		"drums_high_b": "res://audio/music/stage1_drums_breakbeat_dnb.wav",
-		"drums_low": "res://audio/music/stage1_drums_sparse.wav",
-	},
-	2: {
-		"base_a": "res://audio/music/stage2_base_a.wav",
-		"base_b": "res://audio/music/stage2_base_b.wav",
-		"drums_high_a": "res://audio/music/stage2_drums_electro_a.wav",
-		"drums_high_b": "res://audio/music/stage2_drums_electro_b.wav",
-		"drums_low": "res://audio/music/stage2_drums_sparse.wav",
-	},
-}
-const FIRE_SOUND := preload("res://audio/sfx/player_fire.wav")
-const HIT_SOUND := preload("res://audio/sfx/player_hit.wav")
-const KILL_SOUND := preload("res://audio/sfx/enemy_killed.wav")
-const CLEAR_SOUND := preload("res://audio/sfx/stage_clear.wav")
-const GAME_OVER_SOUND := preload("res://audio/sfx/game_over.wav")
-const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
 const STAGE_TRANSITION_TIME := 1.85
 
 @export var storm_path: NodePath
@@ -52,6 +30,7 @@ var _runner: Node
 var _player: StormPlayer
 var _hud_label: Label
 var _hud: StageHud
+var _audio: StageAudio
 var _hazards: Array[StageHazard] = []
 var _pickups: Array[StagePickup] = []
 var _bullets: Array[StageBullet] = []
@@ -59,19 +38,10 @@ var _enemy_bolts: Array[EnemyBolt] = []
 var _active_markers: Dictionary = {}
 var _pickup_markers: Dictionary = {}
 var _rim_obstacles: Array[RimObstacle] = []
-var _base_player: AudioStreamPlayer
-var _drums_high_player: AudioStreamPlayer
-var _drums_low_player: AudioStreamPlayer
-var _sfx_player: AudioStreamPlayer
 var _score: int = 0
 var _stage: int = 1
 var _game_over: bool = false
 var _game_complete: bool = false
-var _base_passes: Array[AudioStream] = []
-var _drums_high_passes: Array[AudioStream] = []
-var _pass_index: int = 0
-var _loaded_music_stage: int = 0
-var _music_intensity: float = 0.0
 var _damage_invulnerability_timer: float = 0.0
 var _stage_elapsed_time: float = 0.0
 var _stage_transition_timer: float = 0.0
@@ -137,14 +107,8 @@ func _ready() -> void:
 	_update_hud()
 
 func _exit_tree() -> void:
-	if _base_player:
-		_base_player.stop()
-	if _drums_high_player:
-		_drums_high_player.stop()
-	if _drums_low_player:
-		_drums_low_player.stop()
-	if _sfx_player:
-		_sfx_player.stop()
+	if _audio:
+		_audio.stop_all()
 	_clear_markers()
 	_clear_pickup_markers()
 	_clear_bullets()
@@ -244,7 +208,7 @@ func _start_stage(stage: int) -> void:
 	_clear_rim_obstacles()
 	_build_stage_for(_stage)
 	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
-	_load_music_stage(_stage)
+	_audio.load_music_stage(_stage)
 	_hud.hide_state_overlay()
 	_update_hud()
 
@@ -422,12 +386,12 @@ func _on_hud_stage_selected(stage: int) -> void:
 	if not _run_active:
 		_stage = stage
 		_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
-		_load_music_stage(_stage)
+		_audio.load_music_stage(_stage)
 		_build_stage_for(_stage)
 		_update_hud()
 
 func _advance_stage() -> void:
-	_play_sfx(CLEAR_SOUND)
+	_play_sfx(StageAudio.CLEAR_SOUND)
 	_damage_invulnerability_timer = 0.0
 	var completed_stage: int = _stage
 	var next_stage: int = _stage + 1
@@ -478,7 +442,7 @@ func _continue_to_pending_stage() -> void:
 	_player.reset_fire_cooldown()
 	_run_active = true
 	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
-	_load_music_stage(_stage)
+	_audio.load_music_stage(_stage)
 	_build_stage_for(_stage)
 	_hud.hide_state_overlay()
 
@@ -510,17 +474,19 @@ func _update_marker_pose(hazard: StageHazard) -> void:
 
 func _hit_player(hazard: StageHazard) -> void:
 	if hazard.kind == "gate_field":
-		_damage_player(HIT_SOUND)
+		_damage_player(StageAudio.HIT_SOUND)
 		return
 	if hazard.kind == "gate_post":
 		hazard.hit = true
-		_damage_player(HIT_SOUND)
+		_damage_player(StageAudio.HIT_SOUND)
 		_destroy_gate(hazard.gate_id, false)
 		return
 	hazard.hit = true
 	hazard.cleared = true
 	_remove_marker(hazard)
-	_damage_player(EXPLODER_SOUND if hazard.kind == "exploder" else HIT_SOUND)
+	_damage_player(
+		StageAudio.EXPLODER_SOUND if hazard.kind == "exploder" else StageAudio.HIT_SOUND
+	)
 
 func _remove_marker(hazard: StageHazard) -> void:
 	if not _active_markers.has(hazard):
@@ -576,17 +542,17 @@ func _collect_pickup(pickup: StagePickup) -> void:
 			lives += 1
 			_score += 500
 			_hud.show_notice("EXTRA LIFE")
-			_play_sfx(CLEAR_SOUND, -8.0)
+			_play_sfx(StageAudio.CLEAR_SOUND, -8.0)
 		"purge":
 			_score += 750
 			_purge_rim_obstacles()
 			_hud.show_notice("CLEARANCE PULSE")
-			_play_sfx(EXPLODER_SOUND, -8.0)
+			_play_sfx(StageAudio.EXPLODER_SOUND, -8.0)
 
 func _destroy_pickup(pickup: StagePickup) -> void:
 	pickup.cleared = true
 	_remove_pickup_marker(pickup)
-	_play_sfx(KILL_SOUND, -12.0)
+	_play_sfx(StageAudio.KILL_SOUND, -12.0)
 
 func _purge_rim_obstacles() -> void:
 	for obstacle in _rim_obstacles:
@@ -622,7 +588,7 @@ func _fire() -> void:
 	bullet.marker = StageMarkerFactory.build_bullet_marker()
 	_storm.add_child(bullet.marker)
 	_bullets.append(bullet)
-	_play_sfx(FIRE_SOUND, -7.0)
+	_play_sfx(StageAudio.FIRE_SOUND, -7.0)
 
 func _update_bullets(delta: float) -> void:
 	for i in range(_bullets.size() - 1, -1, -1):
@@ -685,9 +651,12 @@ func _destroy_hazard(hazard: StageHazard) -> void:
 	if hazard.kind == "splitter":
 		_spawn_hazard(hazard.distance + 8.0, hazard.lane - 1, "flipper")
 		_spawn_hazard(hazard.distance + 8.0, hazard.lane + 1, "flipper")
-		_play_sfx(KILL_SOUND, -3.5)
+		_play_sfx(StageAudio.KILL_SOUND, -3.5)
 		return
-	_play_sfx(EXPLODER_SOUND if hazard.kind == "exploder" else KILL_SOUND, -4.0)
+	_play_sfx(
+		StageAudio.EXPLODER_SOUND if hazard.kind == "exploder" else StageAudio.KILL_SOUND,
+		-4.0
+	)
 
 func _destroy_gate(gate_id: int, award_score: bool = true) -> void:
 	if gate_id < 0:
@@ -705,7 +674,7 @@ func _destroy_gate(gate_id: int, award_score: bool = true) -> void:
 	if destroyed:
 		if award_score:
 			_score += 750
-			_play_sfx(KILL_SOUND, -3.5)
+			_play_sfx(StageAudio.KILL_SOUND, -3.5)
 
 func _update_bullet_pose(bullet: StageBullet) -> void:
 	var sample: StormTube.RouteSample = _storm.sample_at_distance(bullet.distance)
@@ -736,7 +705,7 @@ func _update_enemy_bolts(delta: float, player_distance: float, player_lane: int)
 		bolt.distance -= pulsar_bolt_speed * delta
 		if bolt.distance <= player_distance + hit_window:
 			if bolt.lane == player_lane:
-				_damage_player(HIT_SOUND)
+				_damage_player(StageAudio.HIT_SOUND)
 				if _game_over:
 					return
 			bolt.marker.queue_free()
@@ -803,7 +772,7 @@ func _update_rim_obstacles(delta: float, player_lane: int) -> void:
 					_spawn_burst(obstacle.marker.global_position)
 					obstacle.marker.queue_free()
 					_rim_obstacles.remove_at(i)
-					_damage_player(EXPLODER_SOUND)
+					_damage_player(StageAudio.EXPLODER_SOUND)
 					if _game_over:
 						return
 					continue
@@ -820,7 +789,7 @@ func _decay_anchor_obstacle(obstacle: RimObstacle, delta: float) -> bool:
 		return false
 	_spawn_burst(obstacle.marker.global_position)
 	obstacle.marker.queue_free()
-	_play_sfx(KILL_SOUND, -8.0)
+	_play_sfx(StageAudio.KILL_SOUND, -8.0)
 	return true
 
 func _step_lane_toward(from_lane: int, target_lane: int) -> int:
@@ -869,7 +838,9 @@ func _check_rim_obstacle_collision(player_lane: int) -> void:
 			continue
 		obstacle.marker.queue_free()
 		_rim_obstacles.remove_at(i)
-		_damage_player(EXPLODER_SOUND if obstacle.kind == "exploder" else HIT_SOUND)
+		_damage_player(
+			StageAudio.EXPLODER_SOUND if obstacle.kind == "exploder" else StageAudio.HIT_SOUND
+		)
 		return
 
 func _damage_player(sound: AudioStream) -> void:
@@ -879,17 +850,12 @@ func _damage_player(sound: AudioStream) -> void:
 	_damage_invulnerability_timer = damage_invulnerability_time
 	if _runner.has_method("play_damage_feedback"):
 		_runner.play_damage_feedback(damage_invulnerability_time)
-	_play_sfx(sound, _damage_sound_volume(sound))
+	_play_sfx(sound, StageAudio.damage_sound_volume(sound))
 	if lives == 0:
 		_trigger_game_over()
 
 func _can_damage_player() -> bool:
 	return not _game_over and _damage_invulnerability_timer <= 0.0
-
-func _damage_sound_volume(sound: AudioStream) -> float:
-	if sound == EXPLODER_SOUND:
-		return -5.0
-	return -7.0
 
 func _trigger_game_over() -> void:
 	if _game_over:
@@ -904,14 +870,14 @@ func _trigger_game_over() -> void:
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
-	_play_sfx(GAME_OVER_SOUND, -2.0)
+	_play_sfx(StageAudio.GAME_OVER_SOUND, -2.0)
 	_hud.show_game_over_screen(_score, _stage)
 
 func _burst_rim_obstacles() -> void:
 	for obstacle in _rim_obstacles:
 		_spawn_burst(obstacle.marker.global_position)
 	if not _rim_obstacles.is_empty():
-		_play_sfx(EXPLODER_SOUND, -5.0)
+		_play_sfx(StageAudio.EXPLODER_SOUND, -5.0)
 
 func _spawn_burst(position: Vector3) -> void:
 	var burst: Node3D = StageMarkerFactory.build_burst_marker()
@@ -927,88 +893,25 @@ func _clear_rim_obstacles() -> void:
 	_rim_obstacles.clear()
 
 func _setup_audio() -> void:
-	_ensure_audio_bus("Music")
-	_ensure_audio_bus("Sound")
-	_base_player = _music_player_node("BasePlayer")
-	_drums_high_player = _music_player_node("DrumsHighPlayer")
-	_drums_low_player = _music_player_node("DrumsLowPlayer")
-	_base_player.finished.connect(_on_music_pass_finished)
-	_load_music_stage(1)
-
-	_sfx_player = AudioStreamPlayer.new()
-	_sfx_player.bus = "Sound"
-	add_child(_sfx_player)
-
-func _music_player_node(node_name: String) -> AudioStreamPlayer:
-	var player: AudioStreamPlayer = AudioStreamPlayer.new()
-	player.name = node_name
-	player.bus = "Music"
-	add_child(player)
-	return player
-
-func _load_music_stage(stage: int) -> void:
-	var resolved_stage: int = 2 if stage >= 2 else 1
-	if _loaded_music_stage == resolved_stage:
-		return
-	_loaded_music_stage = resolved_stage
-	var stems: Dictionary = STAGE_MUSIC[resolved_stage]
-	_base_passes = [load(stems["base_a"]), load(stems["base_b"])]
-	_drums_high_passes = [load(stems["drums_high_a"]), load(stems["drums_high_b"])]
-	for stream in _base_passes:
-		_set_loop(stream, AudioStreamWAV.LOOP_DISABLED)
-	for stream in _drums_high_passes:
-		_set_loop(stream, AudioStreamWAV.LOOP_DISABLED)
-	var low_drums: AudioStream = load(stems["drums_low"])
-	_set_loop(low_drums, AudioStreamWAV.LOOP_FORWARD)
-	_drums_low_player.stream = low_drums
-	_drums_low_player.volume_db = 0.0
-	_drums_high_player.volume_db = -80.0
-	_music_intensity = 0.0
-	_pass_index = 0
-	_play_current_music_pass()
-	_drums_low_player.play()
-
-func _set_loop(stream: AudioStream, mode: int) -> void:
-	if stream is AudioStreamWAV:
-		stream.loop_mode = mode
-
-func _play_current_music_pass() -> void:
-	_base_player.stream = _base_passes[_pass_index]
-	_drums_high_player.stream = _drums_high_passes[_pass_index]
-	_base_player.volume_db = -9.0
-	_drums_high_player.play()
-	_base_player.play()
-
-func _on_music_pass_finished() -> void:
-	_pass_index = (_pass_index + 1) % _base_passes.size()
-	_play_current_music_pass()
+	_audio = StageAudio.new()
+	add_child(_audio)
+	_audio.setup(1)
 
 func _update_music_intensity(delta: float) -> void:
-	if _drums_high_player == null or _drums_low_player == null:
-		return
 	var active_pressure: int = _rim_obstacles.size()
 	for hazard in _hazards:
 		if hazard.spawned and not hazard.cleared and hazard.distance - _runner.distance() < hazard_reveal_distance:
 			active_pressure += 1
-	var target: float = 0.0
-	if high_intensity_obstacles > low_intensity_obstacles:
-		var span: float = float(high_intensity_obstacles - low_intensity_obstacles)
-		target = clampf(float(active_pressure - low_intensity_obstacles) / span, 0.0, 1.0)
-	_music_intensity = lerpf(_music_intensity, target, clampf(delta * music_crossfade_speed, 0.0, 1.0))
-	_drums_high_player.volume_db = linear_to_db(clampf(_music_intensity, 0.001, 1.0))
-	_drums_low_player.volume_db = linear_to_db(clampf(1.0 - _music_intensity, 0.001, 1.0))
+	_audio.update_music_intensity(
+		delta,
+		active_pressure,
+		low_intensity_obstacles,
+		high_intensity_obstacles,
+		music_crossfade_speed
+	)
 
 func _play_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
-	_sfx_player.stream = stream
-	_sfx_player.volume_db = volume_db
-	_sfx_player.play()
-
-func _ensure_audio_bus(bus_name: String) -> void:
-	if AudioServer.get_bus_index(bus_name) != -1:
-		return
-	AudioServer.add_bus()
-	var index: int = AudioServer.bus_count - 1
-	AudioServer.set_bus_name(index, bus_name)
+	_audio.play_sfx(stream, volume_db)
 
 func _update_hud() -> void:
 	var progress: int = int(clampf(_runner.distance() / _stage_end_distance(), 0.0, 1.0) * 100.0)
