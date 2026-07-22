@@ -638,7 +638,7 @@ func _stage_clear_time_bonus(seconds: float) -> int:
 func _ensure_marker(hazard: StageHazard) -> void:
 	if _active_markers.has(hazard):
 		return
-	var marker: Node3D = _build_enemy_marker(hazard.kind)
+	var marker: Node3D = StageMarkerFactory.build_enemy_marker(hazard.kind)
 	_storm.add_child(marker)
 	_active_markers[hazard] = marker
 
@@ -653,7 +653,7 @@ func _update_marker_pose(hazard: StageHazard) -> void:
 	var side: Vector3 = radial.cross(forward).normalized()
 	marker.global_position = sample.position + radial * (_storm.radius * 0.84)
 	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
-	_animate_enemy_art(marker, hazard.kind)
+	StageMarkerFactory.animate_enemy_art(marker, hazard.kind)
 
 func _hit_player(hazard: StageHazard) -> void:
 	if hazard.kind == "gate_field":
@@ -684,7 +684,7 @@ func _clear_markers() -> void:
 func _ensure_pickup_marker(pickup: StagePickup) -> void:
 	if _pickup_markers.has(pickup):
 		return
-	var marker: Node3D = _build_pickup_marker(pickup.kind)
+	var marker: Node3D = StageMarkerFactory.build_pickup_marker(pickup.kind)
 	_storm.add_child(marker)
 	_pickup_markers[pickup] = marker
 
@@ -699,7 +699,7 @@ func _update_pickup_marker_pose(pickup: StagePickup) -> void:
 	var side: Vector3 = radial.cross(forward).normalized()
 	marker.global_position = sample.position + radial * (_storm.radius * 0.78)
 	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
-	_animate_pickup_art(marker, pickup.kind)
+	StageMarkerFactory.animate_pickup_art(marker, pickup.kind)
 
 func _remove_pickup_marker(pickup: StagePickup) -> void:
 	if not _pickup_markers.has(pickup):
@@ -748,7 +748,7 @@ func _show_hud_notice(text: String) -> void:
 func _spawn_pickup_collect_effect(position: Vector3, kind: String) -> void:
 	var effect: Node3D = Node3D.new()
 	effect.global_position = position
-	var material: StandardMaterial3D = _pickup_accent_material(kind)
+	var material: StandardMaterial3D = StageMarkerFactory.pickup_accent_material(kind)
 	for i in 12:
 		var shard: MeshInstance3D = MeshInstance3D.new()
 		var mesh: BoxMesh = BoxMesh.new()
@@ -770,7 +770,7 @@ func _fire() -> void:
 	bullet.lane = _runner.lane_index()
 	bullet.distance = _runner.distance() + 4.0
 	bullet.start_distance = bullet.distance
-	bullet.marker = _build_bullet_marker()
+	bullet.marker = StageMarkerFactory.build_bullet_marker()
 	_storm.add_child(bullet.marker)
 	_bullets.append(bullet)
 	_play_sfx(FIRE_SOUND, -7.0)
@@ -858,18 +858,6 @@ func _destroy_gate(gate_id: int, award_score: bool = true) -> void:
 			_score += 750
 			_play_sfx(KILL_SOUND, -3.5)
 
-func _build_bullet_marker() -> Node3D:
-	var marker: Node3D = Node3D.new()
-	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-	var mesh: CapsuleMesh = CapsuleMesh.new()
-	mesh.radius = 0.16
-	mesh.height = 2.8
-	mesh_instance.mesh = mesh
-	mesh_instance.rotation_degrees.x = 90.0
-	mesh_instance.material_override = _bullet_material()
-	marker.add_child(mesh_instance)
-	return marker
-
 func _update_bullet_pose(bullet: StageBullet) -> void:
 	var sample: StormTube.RouteSample = _storm.sample_at_distance(bullet.distance)
 	var lane_angle: float = _runner.lane_angle_for_index(bullet.lane)
@@ -888,7 +876,7 @@ func _fire_enemy_bolt(lane: int, distance: float) -> void:
 	var bolt: EnemyBolt = EnemyBolt.new()
 	bolt.lane = lane
 	bolt.distance = distance
-	bolt.marker = _build_enemy_bolt_marker()
+	bolt.marker = StageMarkerFactory.build_enemy_bolt_marker()
 	_storm.add_child(bolt.marker)
 	_enemy_bolts.append(bolt)
 	_update_enemy_bolt_pose(bolt)
@@ -910,18 +898,6 @@ func _update_enemy_bolts(delta: float, player_distance: float, player_lane: int)
 			_enemy_bolts.remove_at(i)
 			continue
 		_update_enemy_bolt_pose(bolt)
-
-func _build_enemy_bolt_marker() -> Node3D:
-	var marker: Node3D = Node3D.new()
-	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-	var mesh: CapsuleMesh = CapsuleMesh.new()
-	mesh.radius = 0.18
-	mesh.height = 2.1
-	mesh_instance.mesh = mesh
-	mesh_instance.rotation_degrees.x = 90.0
-	mesh_instance.material_override = _enemy_bolt_material()
-	marker.add_child(mesh_instance)
-	return marker
 
 func _update_enemy_bolt_pose(bolt: EnemyBolt) -> void:
 	var sample: StormTube.RouteSample = _storm.sample_at_distance(bolt.distance)
@@ -956,7 +932,7 @@ func _should_anchor_hazard(hazard: StageHazard) -> bool:
 	return hazard.kind != "gate_field" and hazard.kind != "gate_post"
 
 func _build_obstacle_marker(kind: String) -> Node3D:
-	var marker: Node3D = _build_enemy_marker(kind)
+	var marker: Node3D = StageMarkerFactory.build_enemy_marker(kind)
 	marker.scale = Vector3.ONE * 1.15
 	return marker
 
@@ -1018,7 +994,7 @@ func _update_rim_obstacle_pose(obstacle: RimObstacle, stack_index: int) -> void:
 	var side_offset: float = _stack_offset(stack_index)
 	obstacle.marker.global_position = sample.position + radial * (_storm.radius * 0.86) + side * side_offset
 	obstacle.marker.global_basis = Basis(side, radial, -forward).orthonormalized()
-	_animate_enemy_art(obstacle.marker, obstacle.kind)
+	StageMarkerFactory.animate_enemy_art(obstacle.marker, obstacle.kind)
 
 func _lane_stack_index(obstacle: RimObstacle) -> int:
 	var index: int = 0
@@ -1088,18 +1064,8 @@ func _burst_rim_obstacles() -> void:
 		_play_sfx(EXPLODER_SOUND, -5.0)
 
 func _spawn_burst(position: Vector3) -> void:
-	var burst: Node3D = Node3D.new()
+	var burst: Node3D = StageMarkerFactory.build_burst_marker()
 	burst.global_position = position
-	for i in 8:
-		var shard: MeshInstance3D = MeshInstance3D.new()
-		var mesh: BoxMesh = BoxMesh.new()
-		mesh.size = Vector3(0.08, 0.08, 0.9)
-		shard.mesh = mesh
-		var angle: float = TAU * float(i) / 8.0
-		shard.position = Vector3(cos(angle), sin(angle), 0.0) * 0.65
-		shard.rotation = Vector3(0.0, 0.0, angle)
-		shard.material_override = _burst_material()
-		burst.add_child(shard)
 	_storm.add_child(burst)
 	var tween: Tween = create_tween()
 	tween.tween_property(burst, "scale", Vector3.ONE * 2.4, 0.24)
@@ -1109,277 +1075,6 @@ func _clear_rim_obstacles() -> void:
 	for obstacle in _rim_obstacles:
 		obstacle.marker.queue_free()
 	_rim_obstacles.clear()
-
-func _build_enemy_marker(kind: String) -> Node3D:
-	var marker: Node3D = Node3D.new()
-	marker.set_meta("kind", kind)
-	var material: StandardMaterial3D = _material_for_kind(kind)
-	var accent: StandardMaterial3D = _accent_material_for_kind(kind)
-	match kind:
-		"splitter":
-			_add_sphere_part(marker, 0.62, Vector3.ZERO, material)
-			_add_prism_part(marker, Vector3(0.72, 0.48, 1.35), Vector3(-0.82, 0.0, 0.12), Vector3(0.0, 0.0, 0.65), accent)
-			_add_prism_part(marker, Vector3(0.72, 0.48, 1.35), Vector3(0.82, 0.0, 0.12), Vector3(0.0, 0.0, -0.65), accent)
-			_add_box_part(marker, Vector3(2.05, 0.12, 0.18), Vector3(0.0, 0.0, -0.2), Vector3.ZERO, accent)
-			_add_sphere_part(marker, 0.24, Vector3(-0.58, 0.36, -0.42), accent)
-			_add_sphere_part(marker, 0.24, Vector3(0.58, -0.36, -0.42), accent)
-		"spiker":
-			_add_prism_part(marker, Vector3(0.62, 0.62, 2.75), Vector3.ZERO, Vector3.ZERO, material)
-			_add_box_part(marker, Vector3(1.65, 0.08, 0.18), Vector3(0.0, 0.0, -0.35), Vector3(0.0, 0.0, 0.35), accent)
-			_add_box_part(marker, Vector3(1.15, 0.08, 0.16), Vector3(0.0, 0.0, 0.45), Vector3(0.0, 0.0, -0.45), accent)
-			_add_prism_part(marker, Vector3(0.28, 0.28, 0.9), Vector3(-0.48, 0.16, 0.82), Vector3(0.0, 0.0, 0.35), accent)
-			_add_prism_part(marker, Vector3(0.28, 0.28, 0.9), Vector3(0.48, -0.16, 0.82), Vector3(0.0, 0.0, -0.35), accent)
-		"pulsar":
-			var spin: Node3D = Node3D.new()
-			spin.name = "Spin"
-			marker.add_child(spin)
-			_add_sphere_part(spin, 0.58, Vector3.ZERO, material)
-			_add_box_part(spin, Vector3(2.05, 0.08, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
-			_add_box_part(spin, Vector3(0.08, 2.05, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
-			_add_box_part(spin, Vector3(0.08, 0.08, 1.45), Vector3.ZERO, Vector3.ZERO, accent)
-		"exploder":
-			var pulse: Node3D = Node3D.new()
-			pulse.name = "Pulse"
-			marker.add_child(pulse)
-			_add_sphere_part(pulse, 0.74, Vector3.ZERO, material)
-			_add_box_part(pulse, Vector3(2.0, 0.07, 0.07), Vector3.ZERO, Vector3(0.0, 0.0, 0.55), accent)
-			_add_box_part(pulse, Vector3(0.07, 2.0, 0.07), Vector3.ZERO, Vector3(0.0, 0.0, -0.55), accent)
-			_add_box_part(pulse, Vector3(0.07, 0.07, 2.0), Vector3.ZERO, Vector3(0.55, 0.0, 0.0), accent)
-		"gate_post":
-			var pulse: Node3D = Node3D.new()
-			pulse.name = "Pulse"
-			marker.add_child(pulse)
-			_add_box_part(pulse, Vector3(0.22, 1.85, 0.22), Vector3.ZERO, Vector3.ZERO, material)
-			_add_box_part(pulse, Vector3(0.54, 0.16, 0.34), Vector3(0.0, 0.84, 0.0), Vector3.ZERO, accent)
-			_add_box_part(pulse, Vector3(0.54, 0.16, 0.34), Vector3(0.0, -0.84, 0.0), Vector3.ZERO, accent)
-			_add_box_part(pulse, Vector3(0.08, 1.55, 0.42), Vector3(-0.22, 0.0, 0.0), Vector3.ZERO, accent)
-			_add_box_part(pulse, Vector3(0.08, 1.55, 0.42), Vector3(0.22, 0.0, 0.0), Vector3.ZERO, accent)
-			_add_sphere_part(pulse, 0.24, Vector3.ZERO, accent)
-		"gate_field":
-			var pulse: Node3D = Node3D.new()
-			pulse.name = "Pulse"
-			marker.add_child(pulse)
-			_add_box_part(pulse, Vector3(1.72, 0.12, 0.12), Vector3(0.0, 0.0, 0.0), Vector3.ZERO, material)
-			_add_box_part(pulse, Vector3(1.34, 0.06, 0.08), Vector3(0.0, 0.18, 0.0), Vector3.ZERO, accent)
-			_add_box_part(pulse, Vector3(1.34, 0.06, 0.08), Vector3(0.0, -0.18, 0.0), Vector3.ZERO, accent)
-		"spike":
-			_add_prism_part(marker, Vector3(0.42, 0.42, 1.45), Vector3.ZERO, Vector3.ZERO, material)
-			_add_prism_part(marker, Vector3(0.32, 0.32, 1.05), Vector3(-0.36, 0.0, 0.12), Vector3(0.0, 0.85, 0.0), accent)
-			_add_prism_part(marker, Vector3(0.32, 0.32, 1.05), Vector3(0.36, 0.0, 0.12), Vector3(0.0, -0.85, 0.0), accent)
-		_:
-			_add_prism_part(marker, Vector3(0.82, 0.52, 2.05), Vector3.ZERO, Vector3.ZERO, material)
-			_add_box_part(marker, Vector3(1.45, 0.08, 0.34), Vector3(0.0, 0.0, 0.35), Vector3(0.0, 0.0, -0.45), accent)
-			_add_box_part(marker, Vector3(0.78, 0.08, 0.28), Vector3(-0.48, 0.0, -0.32), Vector3(0.0, 0.0, 0.62), accent)
-			_add_box_part(marker, Vector3(0.78, 0.08, 0.28), Vector3(0.48, 0.0, -0.32), Vector3(0.0, 0.0, -0.62), accent)
-	return marker
-
-func _build_pickup_marker(kind: String) -> Node3D:
-	var marker: Node3D = Node3D.new()
-	var material: StandardMaterial3D = _pickup_material(kind)
-	var accent: StandardMaterial3D = _pickup_accent_material(kind)
-	match kind:
-		"purge":
-			var spin: Node3D = Node3D.new()
-			spin.name = "Spin"
-			marker.add_child(spin)
-			_add_sphere_part(spin, 0.4, Vector3.ZERO, material)
-			_add_box_part(spin, Vector3(1.55, 0.12, 0.08), Vector3(0.0, 0.44, 0.0), Vector3(0.0, 0.0, 0.18), accent)
-			_add_box_part(spin, Vector3(1.55, 0.12, 0.08), Vector3(0.0, -0.44, 0.0), Vector3(0.0, 0.0, -0.18), accent)
-			_add_box_part(spin, Vector3(0.16, 1.28, 0.08), Vector3(-0.52, 0.0, 0.0), Vector3(0.0, 0.0, -0.22), accent)
-			_add_box_part(spin, Vector3(0.16, 1.28, 0.08), Vector3(0.52, 0.0, 0.0), Vector3(0.0, 0.0, 0.22), accent)
-			_add_sphere_part(spin, 0.13, Vector3(-0.78, 0.42, 0.0), accent)
-			_add_sphere_part(spin, 0.13, Vector3(0.78, -0.42, 0.0), accent)
-		_:
-			var spin: Node3D = Node3D.new()
-			spin.name = "Spin"
-			marker.add_child(spin)
-			_add_sphere_part(spin, 0.36, Vector3.ZERO, material)
-			_add_box_part(spin, Vector3(1.32, 0.2, 0.2), Vector3.ZERO, Vector3.ZERO, accent)
-			_add_box_part(spin, Vector3(0.2, 1.32, 0.2), Vector3.ZERO, Vector3.ZERO, accent)
-	return marker
-
-func _add_box_part(parent: Node3D, size: Vector3, position: Vector3, rotation: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
-	var part: MeshInstance3D = MeshInstance3D.new()
-	var mesh: BoxMesh = BoxMesh.new()
-	mesh.size = size
-	part.mesh = mesh
-	part.position = position
-	part.rotation = rotation
-	part.material_override = material
-	parent.add_child(part)
-	return part
-
-func _add_prism_part(parent: Node3D, size: Vector3, position: Vector3, rotation: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
-	var part: MeshInstance3D = MeshInstance3D.new()
-	var mesh: PrismMesh = PrismMesh.new()
-	mesh.size = size
-	part.mesh = mesh
-	part.position = position
-	part.rotation = rotation
-	part.material_override = material
-	parent.add_child(part)
-	return part
-
-func _add_sphere_part(parent: Node3D, radius: float, position: Vector3, material: StandardMaterial3D) -> MeshInstance3D:
-	var part: MeshInstance3D = MeshInstance3D.new()
-	var mesh: SphereMesh = SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = radius * 2.0
-	part.mesh = mesh
-	part.position = position
-	part.material_override = material
-	parent.add_child(part)
-	return part
-
-func _animate_enemy_art(marker: Node3D, kind: String) -> void:
-	var time: float = float(Time.get_ticks_msec()) * 0.001
-	match kind:
-		"pulsar":
-			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
-			if spin:
-				spin.rotation = Vector3(time * 2.1, time * 1.2, time * 2.8)
-		"exploder":
-			var pulse: Node3D = marker.get_node_or_null("Pulse") as Node3D
-			if pulse:
-				var scale_amount: float = 1.0 + 0.13 * sin(time * 11.0)
-				pulse.scale = Vector3.ONE * scale_amount
-				pulse.rotation = Vector3(time * 1.4, time * 0.9, time * 1.8)
-		"gate_post", "gate_field":
-			var pulse: Node3D = marker.get_node_or_null("Pulse") as Node3D
-			if pulse:
-				var scale_y: float = 1.0 + 0.08 * sin(time * 8.0)
-				pulse.scale = Vector3(1.0, scale_y if kind == "gate_post" else 1.0, 1.0)
-
-func _animate_pickup_art(marker: Node3D, kind: String) -> void:
-	var time: float = float(Time.get_ticks_msec()) * 0.001
-	marker.scale = Vector3.ONE * (1.0 + 0.08 * sin(time * 6.5))
-	match kind:
-		"purge":
-			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
-			if spin:
-				spin.rotation = Vector3(0.0, 0.0, time * 1.8)
-		_:
-			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
-			if spin:
-				spin.rotation.z = time * 1.6
-
-func _material_for_kind(kind: String) -> StandardMaterial3D:
-	var color: Color = Color(1.0, 0.25, 0.25)
-	var emission: Color = Color(1.0, 0.08, 0.08)
-	match kind:
-		"splitter":
-			color = Color(1.0, 0.55, 0.08)
-			emission = Color(1.0, 0.28, 0.02)
-		"spiker":
-			color = Color(0.95, 0.25, 0.95)
-			emission = Color(0.9, 0.06, 1.0)
-		"pulsar":
-			color = Color(1.0, 0.95, 0.18)
-			emission = Color(1.0, 0.78, 0.05)
-		"exploder":
-			color = Color(1.0, 0.92, 0.72)
-			emission = Color(1.0, 0.16, 0.08)
-		"gate_post":
-			color = Color(0.10, 0.58, 0.74)
-			emission = Color(0.0, 0.82, 1.0)
-		"gate_field":
-			color = Color(0.02, 0.32, 0.44)
-			emission = Color(0.0, 0.58, 0.78)
-		"spike":
-			color = Color(0.75, 0.15, 0.95)
-			emission = Color(0.9, 0.05, 1.0)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = emission
-	material.emission_energy_multiplier = 2.2
-	return material
-
-func _accent_material_for_kind(kind: String) -> StandardMaterial3D:
-	var color: Color = Color(1.0, 0.55, 1.0)
-	var emission: Color = Color(1.0, 0.15, 1.0)
-	match kind:
-		"splitter":
-			color = Color(1.0, 0.86, 0.18)
-			emission = Color(1.0, 0.62, 0.04)
-		"spiker", "spike":
-			color = Color(1.0, 0.18, 1.0)
-			emission = Color(0.95, 0.0, 1.0)
-		"pulsar":
-			color = Color(1.0, 1.0, 0.58)
-			emission = Color(1.0, 0.96, 0.12)
-		"exploder":
-			color = Color(1.0, 0.32, 0.18)
-			emission = Color(1.0, 0.08, 0.0)
-		"gate_post":
-			color = Color(0.64, 1.0, 1.0)
-			emission = Color(0.05, 1.0, 1.0)
-		"gate_field":
-			color = Color(0.22, 0.95, 1.0)
-			emission = Color(0.0, 0.84, 1.0)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = emission
-	material.emission_energy_multiplier = 3.1
-	return material
-
-func _pickup_material(kind: String) -> StandardMaterial3D:
-	var color: Color = Color(0.55, 1.0, 0.42)
-	var emission: Color = Color(0.2, 1.0, 0.16)
-	if kind == "purge":
-		color = Color(0.3, 0.95, 1.0)
-		emission = Color(0.0, 0.82, 1.0)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = emission
-	material.emission_energy_multiplier = 3.6
-	return material
-
-func _pickup_accent_material(kind: String) -> StandardMaterial3D:
-	var color: Color = Color(0.92, 1.0, 0.72)
-	var emission: Color = Color(0.74, 1.0, 0.28)
-	if kind == "purge":
-		color = Color(0.72, 1.0, 1.0)
-		emission = Color(0.15, 1.0, 1.0)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = emission
-	material.emission_energy_multiplier = 4.2
-	return material
-
-func _bullet_material() -> StandardMaterial3D:
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.4, 1.0, 1.0)
-	material.emission_enabled = true
-	material.emission = Color(0.0, 0.95, 1.0)
-	material.emission_energy_multiplier = 3.2
-	return material
-
-func _enemy_bolt_material() -> StandardMaterial3D:
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(1.0, 0.86, 0.20)
-	material.emission_enabled = true
-	material.emission = Color(1.0, 0.7, 0.05)
-	material.emission_energy_multiplier = 3.4
-	return material
-
-func _burst_material() -> StandardMaterial3D:
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.15, 1.0, 1.0)
-	material.emission_enabled = true
-	material.emission = Color(0.0, 0.95, 1.0)
-	material.emission_energy_multiplier = 3.8
-	return material
 
 func _setup_audio() -> void:
 	_ensure_audio_bus("Music")

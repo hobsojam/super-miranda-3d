@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StageRulesScript := preload("res://scripts/stage_rules.gd")
+const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
 
 var _failures: int = 0
 
@@ -9,6 +10,7 @@ func _initialize() -> void:
 	_test_stage_time_bonus()
 	_test_gate_lanes()
 	_test_anchor_decay()
+	_test_marker_factory()
 
 	if _failures == 0:
 		print("All tests passed")
@@ -73,14 +75,58 @@ func _test_anchor_decay() -> void:
 		"caps decay above max speed"
 	)
 
+func _test_marker_factory() -> void:
+	var enemy: Node3D = StageMarkerFactoryScript.build_enemy_marker("gate_post")
+	_assert_eq(enemy.get_meta("kind"), "gate_post", "enemy marker records kind metadata")
+	_assert_true(enemy.get_node_or_null("Pulse") != null, "gate post marker has a pulse node")
+	_assert_true(_count_meshes(enemy) > 0, "enemy marker creates visible mesh parts")
+	StageMarkerFactoryScript.animate_enemy_art(enemy, "gate_post")
+	enemy.free()
+
+	var pickup: Node3D = StageMarkerFactoryScript.build_pickup_marker("purge")
+	_assert_true(pickup.get_node_or_null("Spin") != null, "purge pickup marker has a spin node")
+	_assert_true(_count_meshes(pickup) > 0, "pickup marker creates visible mesh parts")
+	StageMarkerFactoryScript.animate_pickup_art(pickup, "purge")
+	pickup.free()
+
+	var bullet: Node3D = StageMarkerFactoryScript.build_bullet_marker()
+	_assert_true(_first_material(bullet).emission_enabled, "bullet marker uses emissive material")
+	_assert_eq(
+		_first_material(bullet).shading_mode,
+		BaseMaterial3D.SHADING_MODE_UNSHADED,
+		"bullet marker uses unshaded material"
+	)
+	bullet.free()
+
 func _assert_eq(actual: Variant, expected: Variant, label: String) -> void:
 	if actual == expected:
 		return
 	_failures += 1
 	push_error("%s: expected %s, got %s" % [label, var_to_str(expected), var_to_str(actual)])
 
+func _assert_true(condition: bool, label: String) -> void:
+	if condition:
+		return
+	_failures += 1
+	push_error("%s: condition was false" % label)
+
 func _assert_float_eq(actual: float, expected: float, label: String) -> void:
 	if is_equal_approx(actual, expected):
 		return
 	_failures += 1
 	push_error("%s: expected %f, got %f" % [label, expected, actual])
+
+func _count_meshes(node: Node) -> int:
+	var count: int = 1 if node is MeshInstance3D else 0
+	for child in node.get_children():
+		count += _count_meshes(child)
+	return count
+
+func _first_material(node: Node) -> StandardMaterial3D:
+	if node is MeshInstance3D:
+		return (node as MeshInstance3D).material_override as StandardMaterial3D
+	for child in node.get_children():
+		var material: StandardMaterial3D = _first_material(child)
+		if material != null:
+			return material
+	return null
