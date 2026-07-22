@@ -243,7 +243,7 @@ func _start_stage(stage: int) -> void:
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
 	_build_stage_for(_stage)
-	_storm.set_guide_overdraw_enabled(_stage == 1)
+	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
 	_load_music_stage(_stage)
 	_hud.hide_state_overlay()
 	_update_hud()
@@ -252,50 +252,38 @@ func _start_game() -> void:
 	_start_stage(_hud.selected_start_stage)
 
 func _build_stage_for(stage: int) -> void:
+	_hazards.clear()
+	_pickups.clear()
+	var definition: Dictionary = _stage_definition(stage)
+	for entry in definition["hazards"]:
+		_add_stage_hazard(entry["distance"], entry["lane"], entry["kind"])
+	for gate_pair in definition["gate_pairs"]:
+		_add_gate_pair(
+			gate_pair["distance"],
+			gate_pair["start_lane"],
+			gate_pair["end_lane"],
+			gate_pair["gate_id"]
+		)
+	for pickup in definition["pickups"]:
+		_add_pickup(pickup["distance"], pickup["lane"], pickup["kind"])
+
+func _stage_definition(stage: int) -> Dictionary:
 	if stage == 2:
-		_build_stage_two()
-		return
-	_build_stage_one()
+		return {
+			"hazards": StageTwoDefinition.hazards(),
+			"pickups": StageTwoDefinition.pickups(),
+			"gate_pairs": StageTwoDefinition.gate_pairs(),
+		}
+	return {
+		"hazards": StageOneDefinition.hazards(),
+		"pickups": StageOneDefinition.pickups(),
+		"gate_pairs": StageOneDefinition.gate_pairs(),
+	}
 
-func _build_stage_one() -> void:
-	_hazards.clear()
-	_pickups.clear()
-	var pattern: Array = [
-		[720.0, 4, "flipper"], [820.0, 12, "flipper"], [930.0, 6, "flipper"],
-		[1080.0, 2, "spiker"], [1080.0, 10, "spiker"],
-		[1260.0, 5, "splitter"], [1260.0, 6, "splitter"], [1260.0, 7, "splitter"],
-		[1510.0, 14, "flipper"], [1600.0, 13, "flipper"], [1690.0, 12, "flipper"],
-		[1900.0, 3, "spiker"], [1900.0, 11, "spiker"],
-		[2140.0, 7, "pulsar"], [2250.0, 8, "pulsar"], [2360.0, 9, "pulsar"],
-		[2600.0, 0, "exploder"], [2600.0, 8, "exploder"], [2860.0, 15, "flipper"],
-		[3080.0, 4, "flipper"], [3180.0, 12, "flipper"],
-		[3360.0, 6, "splitter"], [3540.0, 10, "pulsar"],
-		[3640.0, 2, "exploder"]
-	]
-	for entry in pattern:
-		_add_stage_hazard(entry[0], entry[1], entry[2])
-	_add_pickup(1360.0, 6, "purge")
-	_add_pickup(1450.0, 1, "life")
-
-func _build_stage_two() -> void:
-	_hazards.clear()
-	_pickups.clear()
-	var pattern: Array = [
-		[650.0, 1, "flipper"], [780.0, 5, "flipper"], [910.0, 9, "flipper"], [1040.0, 13, "flipper"],
-		[1240.0, 3, "splitter"], [1240.0, 4, "splitter"], [1440.0, 11, "spiker"],
-		[1660.0, 6, "pulsar"], [1810.0, 7, "pulsar"], [1960.0, 8, "pulsar"],
-		[2220.0, 2, "exploder"], [2220.0, 10, "exploder"], [2520.0, 15, "flipper"],
-		[2820.0, 0, "splitter"]
-	]
-	for entry in pattern:
-		_add_stage_hazard(entry[0], entry[1], entry[2])
-	_add_gate_pair(3260.0, 0, 4, 1)
-	_add_gate_pair(3260.0, 8, 12, 2)
-	_add_gate_pair(3500.0, 2, 6, 3)
-	_add_gate_pair(3500.0, 10, 14, 4)
-	_add_gate_pair(3620.0, 5, 10, 5)
-	_add_pickup(1340.0, 4, "purge")
-	_add_pickup(2350.0, 4, "life")
+func _stage_guide_overdraw_enabled(stage: int) -> bool:
+	if stage == 2:
+		return StageTwoDefinition.guide_overdraw_enabled()
+	return StageOneDefinition.guide_overdraw_enabled()
 
 func _add_stage_hazard(distance: float, lane: int, kind: String, gate_id: int = -1) -> StageHazard:
 	if distance >= _stage_end_distance() - hit_window:
@@ -428,7 +416,7 @@ func _on_hud_exit_pressed() -> void:
 func _on_hud_stage_selected(stage: int) -> void:
 	if not _run_active:
 		_stage = stage
-		_storm.set_guide_overdraw_enabled(_stage == 1)
+		_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
 		_load_music_stage(_stage)
 		_build_stage_for(_stage)
 		_update_hud()
@@ -481,7 +469,7 @@ func _continue_to_pending_stage() -> void:
 	_runner.restart_run()
 	_runner.set_input_enabled(true)
 	_run_active = true
-	_storm.set_guide_overdraw_enabled(_stage == 1)
+	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
 	_load_music_stage(_stage)
 	_build_stage_for(_stage)
 	_hud.hide_state_overlay()
