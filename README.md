@@ -40,7 +40,7 @@ There is also a start screen, pause menu, game-over flow, stage-clear flow, test
 
 ## Running
 
-Open the project in Godot 4.4 or newer:
+Open the project in Godot 4.7 or newer:
 
 ```text
 project.godot
@@ -59,8 +59,8 @@ This project is configured for the GL Compatibility renderer.
 A "Windows Desktop" export preset is already configured in
 `export_presets.cfg`. To produce a standalone `.exe`:
 
-1. Install the Godot 4.4 export templates that match your editor (Editor >
-   Manage Export Templates).
+1. Install the Godot export templates matching your installed editor
+   version (Editor > Manage Export Templates).
 2. Create the output folder once, since Godot does not create it:
    `build/windows/`.
 3. Export, either via the editor (Project > Export > Windows Desktop >

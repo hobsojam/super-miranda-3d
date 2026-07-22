@@ -16,7 +16,7 @@ worked on by both Claude and Codex).
 
 ## Setup
 
-- Install Godot 4.4 (stable), GL Compatibility renderer. Open
+- Install Godot 4.7 (stable), GL Compatibility renderer. Open
   `project.godot` directly — there are no addons or external package
   manager dependencies (`project.godot` has no `[autoload]` or addons
   section).
@@ -44,15 +44,20 @@ touching anything under `scripts/`.
 
 - Install matching export templates first (Editor > Manage Export
   Templates, or extract the `templates/` folder from the
-  `Godot_v4.4-stable_export_templates.tpz` package to
-  `%APPDATA%\Godot\export_templates\4.4.stable\`).
+  `Godot_v<version>-stable_export_templates.tpz` package matching your
+  installed editor to `%APPDATA%\Godot\export_templates\<version>.stable\`
+  — e.g. `4.7.1.stable` for Godot 4.7.1). The template folder name must
+  match the editor's exact version, including the patch number.
 - Create the output directory before exporting — Godot does not create it:
   `mkdir -p build/windows`, then
   `godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe`.
 - Embedding the icon/version info into the `.exe` needs `rcedit`
-  (Editor Settings > Export > Windows > Rcedit); without it the export
-  still succeeds but warns and skips that step, leaving the `.exe` with a
-  generic Explorer icon.
+  (Editor Settings > Export > Windows > Rcedit). Without it, the export
+  still succeeds and the `.exe` gets a generic Explorer icon instead of
+  the configured one — on Godot 4.4 this showed as an explicit warning in
+  the export log, but on 4.7.1 the same missing-rcedit case is skipped
+  silently with no warning at all, so don't take a clean export log as
+  proof the icon was actually embedded.
 - `build/` is gitignored — exported binaries are never committed.
 
 CI does not build this preset yet; it only imports resources, lints, runs
