@@ -93,6 +93,8 @@ panel_path = NodePath("Dim")
 music_slider_path = NodePath("Dim/Panel/Margin/VBox/MusicRow/MusicSlider")
 sound_slider_path = NodePath("Dim/Panel/Margin/VBox/SoundRow/SoundSlider")
 exit_button_path = NodePath("Dim/Panel/Margin/VBox/ExitButton")
+fullscreen_checkbox_path = NodePath("Dim/Panel/Margin/VBox/FullscreenCheckButton")
+stage_path = NodePath("../Stage")
 
 [node name="Dim" type="ColorRect" parent="PauseMenu"]
 anchors_preset = 15
@@ -109,9 +111,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -180.0
-offset_top = -118.0
+offset_top = -142.0
 offset_right = 180.0
-offset_bottom = 118.0
+offset_bottom = 142.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBox_pause")
@@ -160,6 +162,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 max_value = 100.0
 value = 80.0
+
+[node name="FullscreenCheckButton" type="CheckButton" parent="PauseMenu/Dim/Panel/Margin/VBox"]
+theme_override_colors/font_color = Color(0.78, 0.92, 1, 1)
+text = "Fullscreen"
 
 [node name="ExitButton" type="Button" parent="PauseMenu/Dim/Panel/Margin/VBox"]
 custom_minimum_size = Vector2(0, 36)
