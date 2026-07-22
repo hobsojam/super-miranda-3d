@@ -8,6 +8,7 @@ const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd
 const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
 const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd")
 const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd")
+const StagePickupRuntimeScript := preload("res://scripts/stage_pickup_runtime.gd")
 const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
@@ -23,6 +24,7 @@ func _initialize() -> void:
 	_test_stage_definitions()
 	_test_rim_obstacle_rules()
 	_test_hazard_runtime()
+	_test_pickup_runtime()
 	_test_player_fire_intent()
 
 	if _failures == 0:
@@ -246,6 +248,37 @@ func _test_hazard_runtime() -> void:
 	_assert_true(runtime.should_show(hazard, 201.0), "shows inside reveal distance")
 	_assert_true(runtime.has_passed_player(hazard, 725.0), "detects passed hazard")
 	_assert_eq(runtime.spawn_hazard(998.0, 1, "spike"), null, "rejects spawned hazard near end")
+
+func _test_pickup_runtime() -> void:
+	_assert_float_eq(
+		StagePickupRuntimeScript.spawn_distance_for(1360.0, 520.0),
+		840.0,
+		"pickup spawn distance uses reveal distance"
+	)
+	_assert_float_eq(
+		StagePickupRuntimeScript.spawn_distance_for(120.0, 520.0),
+		0.0,
+		"pickup spawn distance clamps to stage start"
+	)
+
+	var runtime: StagePickupRuntime = StagePickupRuntimeScript.new()
+	runtime.setup(16, 4.2, 520.0)
+	var pickup: StagePickupRuntime.Pickup = runtime.add_pickup(1360.0, -1, "purge")
+	_assert_eq(runtime.count(), 1, "adds pickup")
+	_assert_eq(pickup.lane, 15, "wraps pickup lane")
+	_assert_eq(pickup.spawn_distance, 840.0, "records pickup spawn distance")
+	_assert_true(runtime.should_activate(pickup, 840.0), "activates at spawn distance")
+	_assert_true(runtime.should_show(pickup, 900.0), "shows inside reveal distance")
+	_assert_true(runtime.has_passed_player(pickup, 1365.0), "detects passed pickup")
+	_assert_true(runtime.can_collect(pickup, 1362.0, 15), "collects matching lane in window")
+	_assert_true(
+		not runtime.can_collect(pickup, 1362.0, 14),
+		"does not collect from another lane"
+	)
+	runtime.clear_pickup(pickup)
+	_assert_true(pickup.cleared, "clears pickup")
+	runtime.clear()
+	_assert_eq(runtime.count(), 0, "clears all pickups")
 
 func _test_player_fire_intent() -> void:
 	var player: StormPlayer = StormPlayerScript.new()

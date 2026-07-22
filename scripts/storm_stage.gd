@@ -1,5 +1,5 @@
-extends Node
 class_name StormStage
+extends Node
 
 const STAGE_TRANSITION_TIME := 1.85
 
@@ -33,7 +33,7 @@ var _hud: StageHud
 var _audio: StageAudio
 var _rim_obstacles: RimObstacleManager
 var _hazards: StageHazardRuntime
-var _pickups: Array[StagePickup] = []
+var _pickups: StagePickupRuntime
 var _bullets: Array[StageBullet] = []
 var _enemy_bolts: Array[EnemyBolt] = []
 var _active_markers: Dictionary = {}
@@ -55,14 +55,6 @@ class StageBullet:
 	var start_distance: float
 	var marker: Node3D
 
-class StagePickup:
-	var spawn_distance: float
-	var lane: int
-	var distance: float
-	var kind: String
-	var spawned: bool = false
-	var cleared: bool = false
-
 class EnemyBolt:
 	var lane: int
 	var distance: float
@@ -77,6 +69,7 @@ func _ready() -> void:
 	_setup_audio()
 	_setup_hud()
 	_setup_hazards()
+	_setup_pickups()
 	_setup_rim_obstacles()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
@@ -244,12 +237,7 @@ func _add_gate_pair(distance: float, start_lane: int, end_lane: int, gate_id: in
 	_hazards.add_gate_pair(distance, start_lane, end_lane, gate_id)
 
 func _add_pickup(distance: float, lane: int, kind: String) -> void:
-	var pickup: StagePickup = StagePickup.new()
-	pickup.distance = distance
-	pickup.spawn_distance = maxf(pickup.distance - hazard_reveal_distance, 0.0)
-	pickup.lane = wrapi(lane, 0, _storm.lane_count)
-	pickup.kind = kind
-	_pickups.append(pickup)
+	_pickups.add_pickup(distance, lane, kind)
 
 func _activate_hazard(hazard: StageHazardRuntime.Hazard) -> void:
 	hazard.spawned = true
@@ -260,27 +248,26 @@ func _update_hazards(delta: float) -> void:
 	_hazards.update_closing(delta, hazard_closing_speed)
 
 func _update_pickups(player_distance: float, player_lane: int) -> void:
-	for pickup in _pickups:
+	for pickup in _pickups.all():
 		if pickup.cleared:
 			continue
 		if not pickup.spawned:
-			if player_distance >= pickup.spawn_distance:
+			if _pickups.should_activate(pickup, player_distance):
 				_activate_pickup(pickup)
 			else:
 				continue
-		var relative: float = pickup.distance - player_distance
-		if relative < -hit_window:
+		if _pickups.has_passed_player(pickup, player_distance):
 			_remove_pickup_marker(pickup)
-			pickup.cleared = true
+			_pickups.clear_pickup(pickup)
 			continue
-		if relative < hazard_reveal_distance:
+		if _pickups.should_show(pickup, player_distance):
 			_ensure_pickup_marker(pickup)
 			_update_pickup_marker_pose(pickup)
-		if absf(relative) <= hit_window and pickup.lane == player_lane:
+		if _pickups.can_collect(pickup, player_distance, player_lane):
 			_collect_pickup(pickup)
 
-func _activate_pickup(pickup: StagePickup) -> void:
-	pickup.spawned = true
+func _activate_pickup(pickup: StagePickupRuntime.Pickup) -> void:
+	_pickups.activate(pickup)
 	_ensure_pickup_marker(pickup)
 	_update_pickup_marker_pose(pickup)
 
@@ -349,6 +336,10 @@ func _setup_hazards() -> void:
 		pulsar_fire_interval,
 		spiker_lane_step_interval
 	)
+
+func _setup_pickups() -> void:
+	_pickups = StagePickupRuntime.new()
+	_pickups.setup(_storm.lane_count, hit_window, hazard_reveal_distance)
 
 func _setup_rim_obstacles() -> void:
 	_rim_obstacles = RimObstacleManager.new()
@@ -475,14 +466,14 @@ func _clear_markers() -> void:
 		(marker as Node3D).queue_free()
 	_active_markers.clear()
 
-func _ensure_pickup_marker(pickup: StagePickup) -> void:
+func _ensure_pickup_marker(pickup: StagePickupRuntime.Pickup) -> void:
 	if _pickup_markers.has(pickup):
 		return
 	var marker: Node3D = StageMarkerFactory.build_pickup_marker(pickup.kind)
 	_storm.add_child(marker)
 	_pickup_markers[pickup] = marker
 
-func _update_pickup_marker_pose(pickup: StagePickup) -> void:
+func _update_pickup_marker_pose(pickup: StagePickupRuntime.Pickup) -> void:
 	var marker: Node3D = _pickup_markers[pickup] as Node3D
 	if marker == null:
 		return
@@ -495,7 +486,7 @@ func _update_pickup_marker_pose(pickup: StagePickup) -> void:
 	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
 	StageMarkerFactory.animate_pickup_art(marker, pickup.kind)
 
-func _remove_pickup_marker(pickup: StagePickup) -> void:
+func _remove_pickup_marker(pickup: StagePickupRuntime.Pickup) -> void:
 	if not _pickup_markers.has(pickup):
 		return
 	var marker: Node3D = _pickup_markers[pickup] as Node3D
@@ -507,9 +498,13 @@ func _clear_pickup_markers() -> void:
 		(marker as Node3D).queue_free()
 	_pickup_markers.clear()
 
-func _collect_pickup(pickup: StagePickup) -> void:
-	pickup.cleared = true
-	var collect_position: Vector3 = (_pickup_markers[pickup] as Node3D).global_position if _pickup_markers.has(pickup) else _runner.global_position
+func _collect_pickup(pickup: StagePickupRuntime.Pickup) -> void:
+	_pickups.clear_pickup(pickup)
+	var collect_position: Vector3 = (
+		(_pickup_markers[pickup] as Node3D).global_position
+		if _pickup_markers.has(pickup)
+		else _runner.global_position
+	)
 	_remove_pickup_marker(pickup)
 	_spawn_pickup_collect_effect(collect_position, pickup.kind)
 	match pickup.kind:
@@ -524,8 +519,8 @@ func _collect_pickup(pickup: StagePickup) -> void:
 			_hud.show_notice("CLEARANCE PULSE")
 			_play_sfx(StageAudio.EXPLODER_SOUND, -8.0)
 
-func _destroy_pickup(pickup: StagePickup) -> void:
-	pickup.cleared = true
+func _destroy_pickup(pickup: StagePickupRuntime.Pickup) -> void:
+	_pickups.clear_pickup(pickup)
 	_remove_pickup_marker(pickup)
 	_play_sfx(StageAudio.KILL_SOUND, -12.0)
 
@@ -568,7 +563,10 @@ func _update_bullets(delta: float) -> void:
 		var bullet: StageBullet = _bullets[i]
 		var previous_distance: float = bullet.distance
 		bullet.distance += bullet_speed * delta
-		var hit_pickup: StagePickup = _find_bullet_pickup(bullet, previous_distance)
+		var hit_pickup: StagePickupRuntime.Pickup = _find_bullet_pickup(
+			bullet,
+			previous_distance
+		)
 		var hit_hazard: StageHazardRuntime.Hazard = _find_bullet_hit(bullet, previous_distance)
 		if hit_pickup != null and (hit_hazard == null or hit_pickup.distance <= hit_hazard.distance):
 			_destroy_pickup(hit_pickup)
@@ -604,10 +602,13 @@ func _find_bullet_hit(
 			best_distance = hazard.distance
 	return best
 
-func _find_bullet_pickup(bullet: StageBullet, previous_distance: float) -> StagePickup:
-	var best: StagePickup = null
+func _find_bullet_pickup(
+	bullet: StageBullet,
+	previous_distance: float
+) -> StagePickupRuntime.Pickup:
+	var best: StagePickupRuntime.Pickup = null
 	var best_distance: float = INF
-	for pickup in _pickups:
+	for pickup in _pickups.all():
 		if not pickup.spawned or pickup.cleared or pickup.lane != bullet.lane:
 			continue
 		if pickup.distance < previous_distance or pickup.distance > bullet.distance + hit_window:
