@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  godot:
+    name: Godot checks
+    runs-on: ubuntu-latest
+
+    env:
+      GODOT_VERSION: "4.4"
+      GODOT_RELEASE: "stable"
+      GODOT_BINARY: Godot_v4.4-stable_linux.x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot
+        run: |
+          curl --fail --location --output godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/${GODOT_BINARY}.zip"
+          unzip -q godot.zip -d godot
+          chmod +x "godot/${GODOT_BINARY}"
+          echo "$PWD/godot" >> "$GITHUB_PATH"
+
+      - name: Check GDScript syntax
+        run: |
+          set -euo pipefail
+          for script in scripts/*.gd; do
+            echo "::group::${script}"
+            "${GODOT_BINARY}" --headless --check-only --script "${script}"
+            echo "::endgroup::"
+          done
+
+      - name: Smoke load project
+        run: |
+          "${GODOT_BINARY}" --headless --path . --quit-after 1
