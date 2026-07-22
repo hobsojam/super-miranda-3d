@@ -619,7 +619,9 @@ func _clear_pickup_markers() -> void:
 
 func _collect_pickup(pickup: StagePickup) -> void:
 	pickup.cleared = true
+	var collect_position: Vector3 = (_pickup_markers[pickup] as Node3D).global_position if _pickup_markers.has(pickup) else _runner.global_position
 	_remove_pickup_marker(pickup)
+	_spawn_pickup_collect_effect(collect_position, pickup.kind)
 	match pickup.kind:
 		"life":
 			lives += 1
@@ -640,6 +642,26 @@ func _purge_rim_obstacles() -> void:
 		_spawn_burst(obstacle.marker.global_position)
 		obstacle.marker.queue_free()
 	_rim_obstacles.clear()
+
+func _spawn_pickup_collect_effect(position: Vector3, kind: String) -> void:
+	var effect: Node3D = Node3D.new()
+	effect.global_position = position
+	var material: StandardMaterial3D = _pickup_accent_material(kind)
+	for i in 12:
+		var shard: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = Vector3(0.09, 0.09, 0.55)
+		shard.mesh = mesh
+		var angle: float = TAU * float(i) / 12.0
+		shard.position = Vector3(cos(angle), sin(angle), 0.0) * 0.42
+		shard.rotation = Vector3(0.0, 0.0, angle)
+		shard.material_override = material
+		effect.add_child(shard)
+	_storm.add_child(effect)
+	var tween: Tween = create_tween()
+	tween.tween_property(effect, "scale", Vector3.ONE * 3.1, 0.28)
+	tween.parallel().tween_property(effect, "rotation", Vector3(0.0, 0.0, TAU * 0.18), 0.28)
+	tween.tween_callback(effect.queue_free)
 
 func _fire() -> void:
 	var bullet: StageBullet = StageBullet.new()
@@ -998,10 +1020,13 @@ func _build_pickup_marker(kind: String) -> Node3D:
 			var spin: Node3D = Node3D.new()
 			spin.name = "Spin"
 			marker.add_child(spin)
-			_add_sphere_part(spin, 0.34, Vector3.ZERO, material)
-			_add_box_part(spin, Vector3(1.7, 0.08, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
-			_add_box_part(spin, Vector3(0.08, 1.7, 0.08), Vector3.ZERO, Vector3.ZERO, accent)
-			_add_box_part(spin, Vector3(0.08, 0.08, 1.7), Vector3.ZERO, Vector3.ZERO, accent)
+			_add_sphere_part(spin, 0.4, Vector3.ZERO, material)
+			_add_box_part(spin, Vector3(1.55, 0.12, 0.08), Vector3(0.0, 0.44, 0.0), Vector3(0.0, 0.0, 0.18), accent)
+			_add_box_part(spin, Vector3(1.55, 0.12, 0.08), Vector3(0.0, -0.44, 0.0), Vector3(0.0, 0.0, -0.18), accent)
+			_add_box_part(spin, Vector3(0.16, 1.28, 0.08), Vector3(-0.52, 0.0, 0.0), Vector3(0.0, 0.0, -0.22), accent)
+			_add_box_part(spin, Vector3(0.16, 1.28, 0.08), Vector3(0.52, 0.0, 0.0), Vector3(0.0, 0.0, 0.22), accent)
+			_add_sphere_part(spin, 0.13, Vector3(-0.78, 0.42, 0.0), accent)
+			_add_sphere_part(spin, 0.13, Vector3(0.78, -0.42, 0.0), accent)
 		_:
 			var spin: Node3D = Node3D.new()
 			spin.name = "Spin"
@@ -1065,7 +1090,7 @@ func _animate_pickup_art(marker: Node3D, kind: String) -> void:
 		"purge":
 			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
 			if spin:
-				spin.rotation = Vector3(time * 1.9, time * 2.7, time * 1.2)
+				spin.rotation = Vector3(0.0, 0.0, time * 1.8)
 		_:
 			var spin: Node3D = marker.get_node_or_null("Spin") as Node3D
 			if spin:
