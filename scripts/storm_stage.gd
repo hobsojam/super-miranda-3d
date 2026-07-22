@@ -23,6 +23,13 @@ const KILL_SOUND := preload("res://audio/sfx/enemy_killed.wav")
 const CLEAR_SOUND := preload("res://audio/sfx/stage_clear.wav")
 const GAME_OVER_SOUND := preload("res://audio/sfx/game_over.wav")
 const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
+const HUD_NOTICE_TIME := 1.15
+const STAGE_TRANSITION_TIME := 1.85
+const STAGE_TARGET_TIME := 180.0
+const STAGE_TIME_BONUS := 5000
+const ANCHOR_DECAY_MIN_SPEED := 22.0
+const ANCHOR_DECAY_MAX_SPEED := 55.0
+const ANCHOR_DECAY_TIME_FAST := 3.5
 
 @export var storm_path: NodePath
 @export var runner_path: NodePath
@@ -71,11 +78,18 @@ var _pass_index: int = 0
 var _loaded_music_stage: int = 0
 var _music_intensity: float = 0.0
 var _damage_invulnerability_timer: float = 0.0
+var _hud_notice: String = ""
+var _hud_notice_timer: float = 0.0
+var _stage_elapsed_time: float = 0.0
+var _stage_transition_timer: float = 0.0
+var _pending_stage: int = 0
+var _last_stage_time_bonus: int = 0
 var _run_active: bool = false
 var _state_layer: CanvasLayer
 var _state_panel: Control
 var _state_title: Label
 var _state_body: Label
+var _stage_selector_row: Control
 var _stage_selector: OptionButton
 var _state_primary_button: Button
 var _state_secondary_button: Button
@@ -95,6 +109,7 @@ class StageHazard:
 	var spike_drop_meter: float = 0.0
 	var spiker_lane_timer: float = 0.0
 	var spiker_lane_direction: int = 1
+	var gate_id: int = -1
 
 class StageBullet:
 	var lane: int
@@ -121,6 +136,7 @@ class RimObstacle:
 	var marker: Node3D
 	var hop_timer: float = 0.0
 	var fuse_timer: float = 0.0
+	var stability: float = 1.0
 
 func _ready() -> void:
 	_storm = get_node(storm_path) as StormTube
@@ -151,6 +167,14 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	_update_music_intensity(delta)
 	_damage_invulnerability_timer = maxf(_damage_invulnerability_timer - delta, 0.0)
+	_hud_notice_timer = maxf(_hud_notice_timer - delta, 0.0)
+
+	if _stage_transition_timer > 0.0:
+		_stage_transition_timer = maxf(_stage_transition_timer - delta, 0.0)
+		if _stage_transition_timer <= 0.0:
+			_continue_to_pending_stage()
+		_update_hud()
+		return
 
 	if Input.is_key_pressed(KEY_R):
 		restart_stage()
@@ -161,6 +185,7 @@ func _process(delta: float) -> void:
 			_start_game()
 		return
 
+	_stage_elapsed_time += delta
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
 	if Input.is_key_pressed(KEY_SPACE) and _fire_timer <= 0.0:
 		_fire()
@@ -216,6 +241,12 @@ func _start_stage(stage: int) -> void:
 	_run_active = true
 	_fire_timer = 0.0
 	_damage_invulnerability_timer = 0.0
+	_hud_notice = ""
+	_hud_notice_timer = 0.0
+	_stage_elapsed_time = 0.0
+	_stage_transition_timer = 0.0
+	_pending_stage = 0
+	_last_stage_time_bonus = 0
 	_runner.set_input_enabled(true)
 	_runner.restart_run()
 	_clear_markers()
@@ -248,18 +279,15 @@ func _build_stage_one() -> void:
 		[1510.0, 14, "flipper"], [1600.0, 13, "flipper"], [1690.0, 12, "flipper"],
 		[1900.0, 3, "spiker"], [1900.0, 11, "spiker"],
 		[2140.0, 7, "pulsar"], [2250.0, 8, "pulsar"], [2360.0, 9, "pulsar"],
-		[2600.0, 0, "exploder"], [2600.0, 8, "exploder"], [2860.0, 15, "flipper"]
+		[2600.0, 0, "exploder"], [2600.0, 8, "exploder"], [2860.0, 15, "flipper"],
+		[3080.0, 4, "flipper"], [3180.0, 12, "flipper"],
+		[3360.0, 6, "splitter"], [3540.0, 10, "pulsar"],
+		[3640.0, 2, "exploder"]
 	]
 	for entry in pattern:
-		var hazard: StageHazard = StageHazard.new()
-		hazard.distance = entry[0]
-		hazard.spawn_distance = maxf(hazard.distance - hazard_reveal_distance, 0.0)
-		hazard.lane = wrapi(entry[1], 0, _storm.lane_count)
-		hazard.kind = entry[2]
-		_init_hazard_skill(hazard)
-		_hazards.append(hazard)
+		_add_stage_hazard(entry[0], entry[1], entry[2])
+	_add_pickup(1360.0, 6, "purge")
 	_add_pickup(1450.0, 1, "life")
-	_add_pickup(2460.0, 12, "purge")
 
 func _build_stage_two() -> void:
 	_hazards.clear()
@@ -272,15 +300,36 @@ func _build_stage_two() -> void:
 		[2820.0, 0, "splitter"]
 	]
 	for entry in pattern:
-		var hazard: StageHazard = StageHazard.new()
-		hazard.distance = entry[0]
-		hazard.spawn_distance = maxf(hazard.distance - hazard_reveal_distance, 0.0)
-		hazard.lane = wrapi(entry[1], 0, _storm.lane_count)
-		hazard.kind = entry[2]
-		_init_hazard_skill(hazard)
-		_hazards.append(hazard)
-	_add_pickup(1180.0, 8, "purge")
+		_add_stage_hazard(entry[0], entry[1], entry[2])
+	_add_gate_pair(3260.0, 0, 4, 1)
+	_add_gate_pair(3260.0, 8, 12, 2)
+	_add_gate_pair(3500.0, 2, 6, 3)
+	_add_gate_pair(3500.0, 10, 14, 4)
+	_add_gate_pair(3620.0, 5, 10, 5)
+	_add_pickup(1340.0, 4, "purge")
 	_add_pickup(2350.0, 4, "life")
+
+func _add_stage_hazard(distance: float, lane: int, kind: String, gate_id: int = -1) -> StageHazard:
+	if distance >= _stage_end_distance() - hit_window:
+		return null
+	var hazard: StageHazard = StageHazard.new()
+	hazard.distance = distance
+	hazard.spawn_distance = maxf(hazard.distance - hazard_reveal_distance, 0.0)
+	hazard.lane = wrapi(lane, 0, _storm.lane_count)
+	hazard.kind = kind
+	hazard.gate_id = gate_id
+	_init_hazard_skill(hazard)
+	_hazards.append(hazard)
+	return hazard
+
+func _add_gate_pair(distance: float, start_lane: int, end_lane: int, gate_id: int) -> void:
+	var count: int = _storm.lane_count
+	var lane: int = wrapi(start_lane, 0, count)
+	var end: int = wrapi(end_lane, 0, count)
+	_add_stage_hazard(distance, lane, "gate_post", gate_id)
+	while lane != end:
+		lane = wrapi(lane + 1, 0, count)
+		_add_stage_hazard(distance, lane, "gate_post" if lane == end else "gate_field", gate_id)
 
 func _add_pickup(distance: float, lane: int, kind: String) -> void:
 	var pickup: StagePickup = StagePickup.new()
@@ -429,6 +478,7 @@ func _setup_state_overlay() -> void:
 	box.add_child(_state_body)
 
 	var selector_row: HBoxContainer = HBoxContainer.new()
+	_stage_selector_row = selector_row
 	selector_row.add_theme_constant_override("separation", 12)
 	box.add_child(selector_row)
 
@@ -474,7 +524,10 @@ func _show_start_screen() -> void:
 	_run_active = false
 	_state_title.text = "MIRANDA"
 	_state_body.text = "Choose starting stage"
+	_stage_selector_row.visible = true
 	_state_primary_button.text = "Start"
+	_state_primary_button.visible = true
+	_state_secondary_button.visible = true
 	_sync_stage_selector()
 	_state_panel.visible = true
 	_state_primary_button.grab_focus()
@@ -483,7 +536,10 @@ func _show_game_over_screen() -> void:
 	_selected_start_stage = _stage
 	_state_title.text = "GAME OVER"
 	_state_body.text = "Score %04d    Stage %d" % [_score, _stage]
+	_stage_selector_row.visible = true
 	_state_primary_button.text = "Restart"
+	_state_primary_button.visible = true
+	_state_secondary_button.visible = true
 	_sync_stage_selector()
 	_state_panel.visible = true
 	_state_primary_button.grab_focus()
@@ -492,10 +548,21 @@ func _show_complete_screen() -> void:
 	_selected_start_stage = 1
 	_state_title.text = "STORM CLEAR"
 	_state_body.text = "Score %04d" % _score
+	_stage_selector_row.visible = true
 	_state_primary_button.text = "Restart"
+	_state_primary_button.visible = true
+	_state_secondary_button.visible = true
 	_sync_stage_selector()
 	_state_panel.visible = true
 	_state_primary_button.grab_focus()
+
+func _show_stage_clear_screen(completed_stage: int, next_stage: int) -> void:
+	_state_title.text = "STAGE %d CLEAR" % completed_stage
+	_state_body.text = "Score %04d\nStage Time %s\nTime Bonus %04d\nNext: Stage %d" % [_score, _format_stage_time(_stage_elapsed_time), _last_stage_time_bonus, next_stage]
+	_stage_selector_row.visible = false
+	_state_primary_button.visible = false
+	_state_secondary_button.visible = false
+	_state_panel.visible = true
 
 func _hide_state_overlay() -> void:
 	if _state_panel:
@@ -524,20 +591,24 @@ func _sync_stage_selector() -> void:
 func _advance_stage() -> void:
 	_play_sfx(CLEAR_SOUND)
 	_damage_invulnerability_timer = 0.0
+	var completed_stage: int = _stage
+	var next_stage: int = _stage + 1
+	_last_stage_time_bonus = _stage_clear_time_bonus(_stage_elapsed_time)
+	_score += _last_stage_time_bonus
 	_clear_markers()
 	_clear_pickup_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_burst_rim_obstacles()
 	_clear_rim_obstacles()
-	_stage += 1
-	_runner.restart_run()
 	for hazard in _hazards:
 		hazard.cleared = true
-	if _stage == 2:
-		_storm.set_guide_overdraw_enabled(false)
-		_load_music_stage(2)
-		_build_stage_two()
+	if next_stage == 2:
+		_pending_stage = next_stage
+		_stage_transition_timer = STAGE_TRANSITION_TIME
+		_run_active = false
+		_runner.set_input_enabled(false)
+		_show_stage_clear_screen(completed_stage, next_stage)
 		_update_hud()
 		return
 	_runner.set_input_enabled(false)
@@ -546,6 +617,35 @@ func _advance_stage() -> void:
 	_run_active = false
 	_show_complete_screen()
 	_update_hud()
+
+func _continue_to_pending_stage() -> void:
+	if _pending_stage <= 0:
+		return
+	_stage = _pending_stage
+	_pending_stage = 0
+	_stage_elapsed_time = 0.0
+	_fire_timer = 0.0
+	_damage_invulnerability_timer = 0.0
+	_hud_notice = ""
+	_hud_notice_timer = 0.0
+	_runner.restart_run()
+	_runner.set_input_enabled(true)
+	_run_active = true
+	_storm.set_guide_overdraw_enabled(_stage == 1)
+	_load_music_stage(_stage)
+	_build_stage_for(_stage)
+	_hide_state_overlay()
+
+func _format_stage_time(seconds: float) -> String:
+	var total_tenths: int = int(roundf(seconds * 10.0))
+	var minutes: int = int(float(total_tenths) / 600.0)
+	var seconds_part: int = int(float(total_tenths - minutes * 600) / 10.0)
+	var tenths: int = total_tenths % 10
+	return "%02d:%02d.%d" % [minutes, seconds_part, tenths]
+
+func _stage_clear_time_bonus(seconds: float) -> int:
+	var ratio: float = clampf((STAGE_TARGET_TIME - seconds) / STAGE_TARGET_TIME, 0.0, 1.0)
+	return int(roundf(ratio * float(STAGE_TIME_BONUS) / 50.0)) * 50
 
 func _ensure_marker(hazard: StageHazard) -> void:
 	if _active_markers.has(hazard):
@@ -568,6 +668,14 @@ func _update_marker_pose(hazard: StageHazard) -> void:
 	_animate_enemy_art(marker, hazard.kind)
 
 func _hit_player(hazard: StageHazard) -> void:
+	if hazard.kind == "gate_field":
+		_damage_player(HIT_SOUND)
+		return
+	if hazard.kind == "gate_post":
+		hazard.hit = true
+		_damage_player(HIT_SOUND)
+		_destroy_gate(hazard.gate_id, false)
+		return
 	hazard.hit = true
 	hazard.cleared = true
 	_remove_marker(hazard)
@@ -626,10 +734,12 @@ func _collect_pickup(pickup: StagePickup) -> void:
 		"life":
 			lives += 1
 			_score += 500
+			_show_hud_notice("EXTRA LIFE")
 			_play_sfx(CLEAR_SOUND, -8.0)
 		"purge":
 			_score += 750
 			_purge_rim_obstacles()
+			_show_hud_notice("CLEARANCE PULSE")
 			_play_sfx(EXPLODER_SOUND, -8.0)
 
 func _destroy_pickup(pickup: StagePickup) -> void:
@@ -642,6 +752,10 @@ func _purge_rim_obstacles() -> void:
 		_spawn_burst(obstacle.marker.global_position)
 		obstacle.marker.queue_free()
 	_rim_obstacles.clear()
+
+func _show_hud_notice(text: String) -> void:
+	_hud_notice = text
+	_hud_notice_timer = HUD_NOTICE_TIME
 
 func _spawn_pickup_collect_effect(position: Vector3, kind: String) -> void:
 	var effect: Node3D = Node3D.new()
@@ -702,6 +816,8 @@ func _find_bullet_hit(bullet: StageBullet, previous_distance: float) -> StageHaz
 	for hazard in _hazards:
 		if not hazard.spawned or hazard.cleared or hazard.lane != bullet.lane:
 			continue
+		if hazard.kind == "gate_field":
+			continue
 		if hazard.distance < previous_distance or hazard.distance > bullet.distance + hit_window:
 			continue
 		if hazard.distance < best_distance:
@@ -723,6 +839,9 @@ func _find_bullet_pickup(bullet: StageBullet, previous_distance: float) -> Stage
 	return best
 
 func _destroy_hazard(hazard: StageHazard) -> void:
+	if hazard.kind == "gate_post":
+		_destroy_gate(hazard.gate_id)
+		return
 	hazard.cleared = true
 	_score += 250
 	_remove_marker(hazard)
@@ -732,6 +851,24 @@ func _destroy_hazard(hazard: StageHazard) -> void:
 		_play_sfx(KILL_SOUND, -3.5)
 		return
 	_play_sfx(EXPLODER_SOUND if hazard.kind == "exploder" else KILL_SOUND, -4.0)
+
+func _destroy_gate(gate_id: int, award_score: bool = true) -> void:
+	if gate_id < 0:
+		return
+	var destroyed: bool = false
+	for hazard in _hazards:
+		if hazard.gate_id != gate_id or hazard.cleared:
+			continue
+		hazard.cleared = true
+		destroyed = true
+		if _active_markers.has(hazard):
+			var marker: Node3D = _active_markers[hazard] as Node3D
+			_spawn_burst(marker.global_position)
+		_remove_marker(hazard)
+	if destroyed:
+		if award_score:
+			_score += 750
+			_play_sfx(KILL_SOUND, -3.5)
 
 func _build_bullet_marker() -> Node3D:
 	var marker: Node3D = Node3D.new()
@@ -835,6 +972,9 @@ func _build_obstacle_marker(kind: String) -> Node3D:
 func _update_rim_obstacles(delta: float, player_lane: int) -> void:
 	for i in range(_rim_obstacles.size() - 1, -1, -1):
 		var obstacle: RimObstacle = _rim_obstacles[i]
+		if _decay_anchor_obstacle(obstacle, delta):
+			_rim_obstacles.remove_at(i)
+			continue
 		match obstacle.kind:
 			"flipper":
 				obstacle.hop_timer -= delta
@@ -852,6 +992,20 @@ func _update_rim_obstacles(delta: float, player_lane: int) -> void:
 						return
 					continue
 		_update_rim_obstacle_pose(obstacle, _lane_stack_index(obstacle))
+
+func _decay_anchor_obstacle(obstacle: RimObstacle, delta: float) -> bool:
+	var speed_factor: float = clampf((_runner.speed() - ANCHOR_DECAY_MIN_SPEED) / (ANCHOR_DECAY_MAX_SPEED - ANCHOR_DECAY_MIN_SPEED), 0.0, 1.0)
+	if speed_factor <= 0.0:
+		return false
+	obstacle.stability -= delta * speed_factor / ANCHOR_DECAY_TIME_FAST
+	var pulse_scale: float = 1.0 + (1.0 - obstacle.stability) * 0.18
+	obstacle.marker.scale = Vector3.ONE * 1.15 * pulse_scale
+	if obstacle.stability > 0.0:
+		return false
+	_spawn_burst(obstacle.marker.global_position)
+	obstacle.marker.queue_free()
+	_play_sfx(KILL_SOUND, -8.0)
+	return true
 
 func _step_lane_toward(from_lane: int, target_lane: int) -> int:
 	var count: int = _storm.lane_count
@@ -1000,6 +1154,23 @@ func _build_enemy_marker(kind: String) -> Node3D:
 			_add_box_part(pulse, Vector3(2.0, 0.07, 0.07), Vector3.ZERO, Vector3(0.0, 0.0, 0.55), accent)
 			_add_box_part(pulse, Vector3(0.07, 2.0, 0.07), Vector3.ZERO, Vector3(0.0, 0.0, -0.55), accent)
 			_add_box_part(pulse, Vector3(0.07, 0.07, 2.0), Vector3.ZERO, Vector3(0.55, 0.0, 0.0), accent)
+		"gate_post":
+			var pulse: Node3D = Node3D.new()
+			pulse.name = "Pulse"
+			marker.add_child(pulse)
+			_add_box_part(pulse, Vector3(0.22, 1.85, 0.22), Vector3.ZERO, Vector3.ZERO, material)
+			_add_box_part(pulse, Vector3(0.54, 0.16, 0.34), Vector3(0.0, 0.84, 0.0), Vector3.ZERO, accent)
+			_add_box_part(pulse, Vector3(0.54, 0.16, 0.34), Vector3(0.0, -0.84, 0.0), Vector3.ZERO, accent)
+			_add_box_part(pulse, Vector3(0.08, 1.55, 0.42), Vector3(-0.22, 0.0, 0.0), Vector3.ZERO, accent)
+			_add_box_part(pulse, Vector3(0.08, 1.55, 0.42), Vector3(0.22, 0.0, 0.0), Vector3.ZERO, accent)
+			_add_sphere_part(pulse, 0.24, Vector3.ZERO, accent)
+		"gate_field":
+			var pulse: Node3D = Node3D.new()
+			pulse.name = "Pulse"
+			marker.add_child(pulse)
+			_add_box_part(pulse, Vector3(1.72, 0.12, 0.12), Vector3(0.0, 0.0, 0.0), Vector3.ZERO, material)
+			_add_box_part(pulse, Vector3(1.34, 0.06, 0.08), Vector3(0.0, 0.18, 0.0), Vector3.ZERO, accent)
+			_add_box_part(pulse, Vector3(1.34, 0.06, 0.08), Vector3(0.0, -0.18, 0.0), Vector3.ZERO, accent)
 		"spike":
 			_add_prism_part(marker, Vector3(0.42, 0.42, 1.45), Vector3.ZERO, Vector3.ZERO, material)
 			_add_prism_part(marker, Vector3(0.32, 0.32, 1.05), Vector3(-0.36, 0.0, 0.12), Vector3(0.0, 0.85, 0.0), accent)
@@ -1082,6 +1253,11 @@ func _animate_enemy_art(marker: Node3D, kind: String) -> void:
 				var scale_amount: float = 1.0 + 0.13 * sin(time * 11.0)
 				pulse.scale = Vector3.ONE * scale_amount
 				pulse.rotation = Vector3(time * 1.4, time * 0.9, time * 1.8)
+		"gate_post", "gate_field":
+			var pulse: Node3D = marker.get_node_or_null("Pulse") as Node3D
+			if pulse:
+				var scale_y: float = 1.0 + 0.08 * sin(time * 8.0)
+				pulse.scale = Vector3(1.0, scale_y if kind == "gate_post" else 1.0, 1.0)
 
 func _animate_pickup_art(marker: Node3D, kind: String) -> void:
 	var time: float = float(Time.get_ticks_msec()) * 0.001
@@ -1112,6 +1288,12 @@ func _material_for_kind(kind: String) -> StandardMaterial3D:
 		"exploder":
 			color = Color(1.0, 0.92, 0.72)
 			emission = Color(1.0, 0.16, 0.08)
+		"gate_post":
+			color = Color(0.10, 0.58, 0.74)
+			emission = Color(0.0, 0.82, 1.0)
+		"gate_field":
+			color = Color(0.02, 0.32, 0.44)
+			emission = Color(0.0, 0.58, 0.78)
 		"spike":
 			color = Color(0.75, 0.15, 0.95)
 			emission = Color(0.9, 0.05, 1.0)
@@ -1139,6 +1321,12 @@ func _accent_material_for_kind(kind: String) -> StandardMaterial3D:
 		"exploder":
 			color = Color(1.0, 0.32, 0.18)
 			emission = Color(1.0, 0.08, 0.0)
+		"gate_post":
+			color = Color(0.64, 1.0, 1.0)
+			emission = Color(0.05, 1.0, 1.0)
+		"gate_field":
+			color = Color(0.22, 0.95, 1.0)
+			emission = Color(0.0, 0.84, 1.0)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = color
@@ -1297,6 +1485,10 @@ func _update_hud() -> void:
 	var status: String = ""
 	if not _run_active and not _game_over:
 		status = "READY"
+	if _stage_transition_timer > 0.0:
+		status = "STAGE CLEAR"
 	if _game_over:
 		status = "CLEAR" if _game_complete else "GAME OVER"
-	_hud_label.text = "STAGE %d  DIST %04d  SPD %02d  SCORE %04d  LIVES %d  RIM %d  ACT %d  PROGRESS %d%%  %s" % [_stage, distance, speed, _score, lives, _rim_obstacles.size(), active_hazards, progress, status]
+	if _hud_notice_timer > 0.0:
+		status = _hud_notice
+	_hud_label.text = "STAGE %d  DIST %04d  SPD %02d  SCORE %04d  LIVES %d  ANCHOR %d  ACT %d  PROGRESS %d%%  %s" % [_stage, distance, speed, _score, lives, _rim_obstacles.size(), active_hazards, progress, status]
