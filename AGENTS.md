@@ -9,11 +9,10 @@ worked on by both Claude and Codex).
   introduce something new, escalate, false summit, fight to the finish).
   Read this before adding, reordering, or tuning anything in a
   `stage_N_definition.gd` file, or before proposing how a stage should end.
-- **`BACKLOG.md`** — open, unresolved design decisions, currently "Pickup
-  Feedback And Defensive Item" and "Environmental Hazards". Check it before
-  making a call on anything it lists as undecided, and add a new section
-  rather than silently picking an answer when you hit an open design
-  question of your own.
+- **`BACKLOG.md`** — open, unresolved design decisions. Check its current
+  sections before making a call on anything it lists as undecided, and add
+  a new section rather than silently picking an answer when you hit an open
+  design question of your own.
 
 ## Setup
 
@@ -40,10 +39,25 @@ touching anything under `scripts/`.
 
 ## Build
 
-There is no packaged export yet — no `export_presets.cfg` is committed, and
-CI does not build one; it only imports resources, lints, runs tests, and
-does a headless smoke load (`.github/workflows/ci.yml`). To produce a
-runnable build, add an export preset via Godot's Project > Export first.
+`export_presets.cfg` has a "Windows Desktop" preset (self-contained
+`--embed-pck` exe, icon at `assets/icon/icon.ico`). To build it:
+
+- Install matching export templates first (Editor > Manage Export
+  Templates, or extract the `templates/` folder from the
+  `Godot_v4.4-stable_export_templates.tpz` package to
+  `%APPDATA%\Godot\export_templates\4.4.stable\`).
+- Create the output directory before exporting — Godot does not create it:
+  `mkdir -p build/windows`, then
+  `godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe`.
+- Embedding the icon/version info into the `.exe` needs `rcedit`
+  (Editor Settings > Export > Windows > Rcedit); without it the export
+  still succeeds but warns and skips that step, leaving the `.exe` with a
+  generic Explorer icon.
+- `build/` is gitignored — exported binaries are never committed.
+
+CI does not build this preset yet; it only imports resources, lints, runs
+tests, and does a headless smoke load (`.github/workflows/ci.yml`). See
+`BACKLOG.md` for the planned CI build/release follow-up.
 
 ## Working alongside other agents
 
