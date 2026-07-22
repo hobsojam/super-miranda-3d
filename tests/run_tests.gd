@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StageRulesScript := preload("res://scripts/stage_rules.gd")
+const StageHudScript := preload("res://scripts/stage_hud.gd")
 const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
 
 var _failures: int = 0
@@ -10,6 +11,7 @@ func _initialize() -> void:
 	_test_stage_time_bonus()
 	_test_gate_lanes()
 	_test_anchor_decay()
+	_test_stage_hud()
 	_test_marker_factory()
 
 	if _failures == 0:
@@ -74,6 +76,31 @@ func _test_anchor_decay() -> void:
 		1.0,
 		"caps decay above max speed"
 	)
+
+func _test_stage_hud() -> void:
+	_assert_eq(
+		StageHudScript.status_text(1, 675, 4, 1250, 3, 0, 5, 55, "READY"),
+		"STAGE 1  DIST 0675  SPD 04  SCORE 1250  LIVES 3  ANCHOR 0  ACT 5  PROGRESS 55%  READY",
+		"formats hud status text"
+	)
+	_assert_eq(
+		StageHudScript.stage_clear_body(5750, "02:13.4", 1400, 2),
+		"Score 5750\nStage Time 02:13.4\nTime Bonus 1400\nNext: Stage 2",
+		"formats stage clear body"
+	)
+
+	var label: Label = Label.new()
+	var hud: StageHud = StageHudScript.new()
+	root.add_child(hud)
+	hud.setup(label)
+	hud.show_notice("CLEARANCE PULSE")
+	hud.update_status(1, 1200, 15, 2500, 2, 1, 4, 38, "RUNNING")
+	_assert_true(label.text.ends_with("CLEARANCE PULSE"), "notice overrides base hud status")
+	hud.tick_notice(StageHudScript.NOTICE_TIME + 0.1)
+	hud.update_status(1, 1200, 15, 2500, 2, 1, 4, 38, "RUNNING")
+	_assert_true(label.text.ends_with("RUNNING"), "hud status resumes after notice expires")
+	hud.free()
+	label.free()
 
 func _test_marker_factory() -> void:
 	var enemy: Node3D = StageMarkerFactoryScript.build_enemy_marker("gate_post")

@@ -23,7 +23,6 @@ const KILL_SOUND := preload("res://audio/sfx/enemy_killed.wav")
 const CLEAR_SOUND := preload("res://audio/sfx/stage_clear.wav")
 const GAME_OVER_SOUND := preload("res://audio/sfx/game_over.wav")
 const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
-const HUD_NOTICE_TIME := 1.15
 const STAGE_TRANSITION_TIME := 1.85
 
 @export var storm_path: NodePath
@@ -51,6 +50,7 @@ const STAGE_TRANSITION_TIME := 1.85
 var _storm: StormTube
 var _runner: Node
 var _hud_label: Label
+var _hud: StageHud
 var _hazards: Array[StageHazard] = []
 var _pickups: Array[StagePickup] = []
 var _bullets: Array[StageBullet] = []
@@ -73,22 +73,11 @@ var _pass_index: int = 0
 var _loaded_music_stage: int = 0
 var _music_intensity: float = 0.0
 var _damage_invulnerability_timer: float = 0.0
-var _hud_notice: String = ""
-var _hud_notice_timer: float = 0.0
 var _stage_elapsed_time: float = 0.0
 var _stage_transition_timer: float = 0.0
 var _pending_stage: int = 0
 var _last_stage_time_bonus: int = 0
 var _run_active: bool = false
-var _state_layer: CanvasLayer
-var _state_panel: Control
-var _state_title: Label
-var _state_body: Label
-var _stage_selector_row: Control
-var _stage_selector: OptionButton
-var _state_primary_button: Button
-var _state_secondary_button: Button
-var _selected_start_stage: int = 1
 
 class StageHazard:
 	var spawn_distance: float
@@ -138,10 +127,10 @@ func _ready() -> void:
 	_runner = get_node(runner_path)
 	_hud_label = get_node(hud_label_path) as Label
 	_setup_audio()
-	_setup_state_overlay()
+	_setup_hud()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
-	_show_start_screen()
+	_hud.show_start_screen()
 	_update_hud()
 
 func _exit_tree() -> void:
@@ -158,11 +147,13 @@ func _exit_tree() -> void:
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
+	if _hud:
+		_hud.queue_free()
 
 func _process(delta: float) -> void:
 	_update_music_intensity(delta)
 	_damage_invulnerability_timer = maxf(_damage_invulnerability_timer - delta, 0.0)
-	_hud_notice_timer = maxf(_hud_notice_timer - delta, 0.0)
+	_hud.tick_notice(delta)
 
 	if _stage_transition_timer > 0.0:
 		_stage_transition_timer = maxf(_stage_transition_timer - delta, 0.0)
@@ -227,20 +218,19 @@ func _process(delta: float) -> void:
 	_update_hud()
 
 func restart_stage() -> void:
-	_start_stage(_selected_start_stage)
+	_start_stage(_hud.selected_start_stage)
 
 func _start_stage(stage: int) -> void:
 	lives = 3
 	_score = 0
 	_stage = clampi(stage, 1, 2)
-	_selected_start_stage = _stage
+	_hud.selected_start_stage = _stage
 	_game_over = false
 	_game_complete = false
 	_run_active = true
 	_fire_timer = 0.0
 	_damage_invulnerability_timer = 0.0
-	_hud_notice = ""
-	_hud_notice_timer = 0.0
+	_hud.clear_notice()
 	_stage_elapsed_time = 0.0
 	_stage_transition_timer = 0.0
 	_pending_stage = 0
@@ -255,11 +245,11 @@ func _start_stage(stage: int) -> void:
 	_build_stage_for(_stage)
 	_storm.set_guide_overdraw_enabled(_stage == 1)
 	_load_music_stage(_stage)
-	_hide_state_overlay()
+	_hud.hide_state_overlay()
 	_update_hud()
 
 func _start_game() -> void:
-	_start_stage(_selected_start_stage)
+	_start_stage(_hud.selected_start_stage)
 
 func _build_stage_for(stage: int) -> void:
 	if stage == 2:
@@ -424,162 +414,24 @@ func _spawn_hazard(distance: float, lane: int, kind: String) -> StageHazard:
 func _stage_end_distance() -> float:
 	return maxf(_storm.route_length, 1.0)
 
-func _setup_state_overlay() -> void:
-	_state_layer = CanvasLayer.new()
-	_state_layer.layer = 20
-	_state_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(_state_layer)
+func _setup_hud() -> void:
+	_hud = StageHud.new()
+	add_child(_hud)
+	_hud.setup(_hud_label)
+	_hud.start_pressed.connect(_start_game)
+	_hud.exit_pressed.connect(_on_hud_exit_pressed)
+	_hud.stage_selected.connect(_on_hud_stage_selected)
 
-	var dim: ColorRect = ColorRect.new()
-	dim.name = "StateDim"
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.0, 0.0, 0.0, 0.52)
-	_state_layer.add_child(dim)
-	_state_panel = dim
-
-	var panel: PanelContainer = PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -210.0
-	panel.offset_top = -130.0
-	panel.offset_right = 210.0
-	panel.offset_bottom = 130.0
-	panel.add_theme_stylebox_override("panel", _state_panel_style())
-	dim.add_child(panel)
-
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 26)
-	margin.add_theme_constant_override("margin_top", 22)
-	margin.add_theme_constant_override("margin_right", 26)
-	margin.add_theme_constant_override("margin_bottom", 22)
-	panel.add_child(margin)
-
-	var box: VBoxContainer = VBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
-	margin.add_child(box)
-
-	_state_title = Label.new()
-	_state_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_state_title.add_theme_color_override("font_color", Color(0.3, 1.0, 1.0))
-	_state_title.add_theme_font_size_override("font_size", 34)
-	box.add_child(_state_title)
-
-	_state_body = Label.new()
-	_state_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_state_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_state_body.add_theme_color_override("font_color", Color(0.78, 0.92, 1.0))
-	_state_body.add_theme_font_size_override("font_size", 16)
-	box.add_child(_state_body)
-
-	var selector_row: HBoxContainer = HBoxContainer.new()
-	_stage_selector_row = selector_row
-	selector_row.add_theme_constant_override("separation", 12)
-	box.add_child(selector_row)
-
-	var selector_label: Label = Label.new()
-	selector_label.custom_minimum_size = Vector2(86.0, 0.0)
-	selector_label.add_theme_color_override("font_color", Color(0.78, 0.92, 1.0))
-	selector_label.text = "Stage"
-	selector_row.add_child(selector_label)
-
-	_stage_selector = OptionButton.new()
-	_stage_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stage_selector.add_item("Stage 1", 1)
-	_stage_selector.add_item("Stage 2", 2)
-	_stage_selector.item_selected.connect(_on_stage_selected)
-	selector_row.add_child(_stage_selector)
-
-	_state_primary_button = Button.new()
-	_state_primary_button.custom_minimum_size = Vector2(0.0, 40.0)
-	_state_primary_button.pressed.connect(_start_game)
-	box.add_child(_state_primary_button)
-
-	_state_secondary_button = Button.new()
-	_state_secondary_button.custom_minimum_size = Vector2(0.0, 34.0)
-	_state_secondary_button.text = "Exit"
-	_state_secondary_button.pressed.connect(_on_state_exit_pressed)
-	box.add_child(_state_secondary_button)
-
-func _state_panel_style() -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.006, 0.014, 0.05, 0.92)
-	style.border_color = Color(0.0, 0.9, 1.0, 0.85)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_right = 6
-	style.corner_radius_bottom_left = 6
-	return style
-
-func _show_start_screen() -> void:
-	_run_active = false
-	_state_title.text = "MIRANDA"
-	_state_body.text = "Choose starting stage"
-	_stage_selector_row.visible = true
-	_state_primary_button.text = "Start"
-	_state_primary_button.visible = true
-	_state_secondary_button.visible = true
-	_sync_stage_selector()
-	_state_panel.visible = true
-	_state_primary_button.grab_focus()
-
-func _show_game_over_screen() -> void:
-	_selected_start_stage = _stage
-	_state_title.text = "GAME OVER"
-	_state_body.text = "Score %04d    Stage %d" % [_score, _stage]
-	_stage_selector_row.visible = true
-	_state_primary_button.text = "Restart"
-	_state_primary_button.visible = true
-	_state_secondary_button.visible = true
-	_sync_stage_selector()
-	_state_panel.visible = true
-	_state_primary_button.grab_focus()
-
-func _show_complete_screen() -> void:
-	_selected_start_stage = 1
-	_state_title.text = "STORM CLEAR"
-	_state_body.text = "Score %04d" % _score
-	_stage_selector_row.visible = true
-	_state_primary_button.text = "Restart"
-	_state_primary_button.visible = true
-	_state_secondary_button.visible = true
-	_sync_stage_selector()
-	_state_panel.visible = true
-	_state_primary_button.grab_focus()
-
-func _show_stage_clear_screen(completed_stage: int, next_stage: int) -> void:
-	_state_title.text = "STAGE %d CLEAR" % completed_stage
-	_state_body.text = "Score %04d\nStage Time %s\nTime Bonus %04d\nNext: Stage %d" % [_score, _format_stage_time(_stage_elapsed_time), _last_stage_time_bonus, next_stage]
-	_stage_selector_row.visible = false
-	_state_primary_button.visible = false
-	_state_secondary_button.visible = false
-	_state_panel.visible = true
-
-func _hide_state_overlay() -> void:
-	if _state_panel:
-		_state_panel.visible = false
-
-func _on_state_exit_pressed() -> void:
+func _on_hud_exit_pressed() -> void:
 	get_tree().quit()
 
-func _on_stage_selected(index: int) -> void:
-	_selected_start_stage = _stage_selector.get_item_id(index)
+func _on_hud_stage_selected(stage: int) -> void:
 	if not _run_active:
-		_stage = _selected_start_stage
+		_stage = stage
 		_storm.set_guide_overdraw_enabled(_stage == 1)
 		_load_music_stage(_stage)
 		_build_stage_for(_stage)
 		_update_hud()
-
-func _sync_stage_selector() -> void:
-	if _stage_selector == null:
-		return
-	for index in range(_stage_selector.item_count):
-		if _stage_selector.get_item_id(index) == _selected_start_stage:
-			_stage_selector.select(index)
-			return
 
 func _advance_stage() -> void:
 	_play_sfx(CLEAR_SOUND)
@@ -601,14 +453,20 @@ func _advance_stage() -> void:
 		_stage_transition_timer = STAGE_TRANSITION_TIME
 		_run_active = false
 		_runner.set_input_enabled(false)
-		_show_stage_clear_screen(completed_stage, next_stage)
+		_hud.show_stage_clear_screen(
+			completed_stage,
+			_score,
+			_format_stage_time(_stage_elapsed_time),
+			_last_stage_time_bonus,
+			next_stage
+		)
 		_update_hud()
 		return
 	_runner.set_input_enabled(false)
 	_game_over = true
 	_game_complete = true
 	_run_active = false
-	_show_complete_screen()
+	_hud.show_complete_screen(_score)
 	_update_hud()
 
 func _continue_to_pending_stage() -> void:
@@ -619,15 +477,14 @@ func _continue_to_pending_stage() -> void:
 	_stage_elapsed_time = 0.0
 	_fire_timer = 0.0
 	_damage_invulnerability_timer = 0.0
-	_hud_notice = ""
-	_hud_notice_timer = 0.0
+	_hud.clear_notice()
 	_runner.restart_run()
 	_runner.set_input_enabled(true)
 	_run_active = true
 	_storm.set_guide_overdraw_enabled(_stage == 1)
 	_load_music_stage(_stage)
 	_build_stage_for(_stage)
-	_hide_state_overlay()
+	_hud.hide_state_overlay()
 
 func _format_stage_time(seconds: float) -> String:
 	return StageRules.format_stage_time(seconds)
@@ -722,12 +579,12 @@ func _collect_pickup(pickup: StagePickup) -> void:
 		"life":
 			lives += 1
 			_score += 500
-			_show_hud_notice("EXTRA LIFE")
+			_hud.show_notice("EXTRA LIFE")
 			_play_sfx(CLEAR_SOUND, -8.0)
 		"purge":
 			_score += 750
 			_purge_rim_obstacles()
-			_show_hud_notice("CLEARANCE PULSE")
+			_hud.show_notice("CLEARANCE PULSE")
 			_play_sfx(EXPLODER_SOUND, -8.0)
 
 func _destroy_pickup(pickup: StagePickup) -> void:
@@ -740,10 +597,6 @@ func _purge_rim_obstacles() -> void:
 		_spawn_burst(obstacle.marker.global_position)
 		obstacle.marker.queue_free()
 	_rim_obstacles.clear()
-
-func _show_hud_notice(text: String) -> void:
-	_hud_notice = text
-	_hud_notice_timer = HUD_NOTICE_TIME
 
 func _spawn_pickup_collect_effect(position: Vector3, kind: String) -> void:
 	var effect: Node3D = Node3D.new()
@@ -1055,7 +908,7 @@ func _trigger_game_over() -> void:
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
 	_play_sfx(GAME_OVER_SOUND, -2.0)
-	_show_game_over_screen()
+	_hud.show_game_over_screen(_score, _stage)
 
 func _burst_rim_obstacles() -> void:
 	for obstacle in _rim_obstacles:
@@ -1175,6 +1028,14 @@ func _update_hud() -> void:
 		status = "STAGE CLEAR"
 	if _game_over:
 		status = "CLEAR" if _game_complete else "GAME OVER"
-	if _hud_notice_timer > 0.0:
-		status = _hud_notice
-	_hud_label.text = "STAGE %d  DIST %04d  SPD %02d  SCORE %04d  LIVES %d  ANCHOR %d  ACT %d  PROGRESS %d%%  %s" % [_stage, distance, speed, _score, lives, _rim_obstacles.size(), active_hazards, progress, status]
+	_hud.update_status(
+		_stage,
+		distance,
+		speed,
+		_score,
+		lives,
+		_rim_obstacles.size(),
+		active_hazards,
+		progress,
+		status
+	)
