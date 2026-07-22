@@ -112,7 +112,7 @@ func _process(delta: float) -> void:
 		return
 
 	if not _run_active or _game_over:
-		if Input.is_action_just_pressed("ui_accept"):
+		if Input.is_action_just_pressed("ui_accept") and _hud.should_accept_shortcut_start():
 			_start_game()
 		return
 

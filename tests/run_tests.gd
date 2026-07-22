@@ -129,6 +129,21 @@ func _test_stage_hud() -> void:
 	hud.tick_notice(StageHudScript.NOTICE_TIME + 0.1)
 	hud.update_status(1, 1200, 15, 2500, 2, 1, 4, 38, "RUNNING")
 	_assert_true(label.text.ends_with("RUNNING"), "hud status resumes after notice expires")
+
+	var stage_selector: OptionButton = hud.find_child("StageSelector", true, false) as OptionButton
+	_assert_true(
+		hud.has_state_control_focus_owner(stage_selector),
+		"stage selector focus belongs to menu modal"
+	)
+	_assert_true(
+		not hud.should_accept_shortcut_start_for_focus(stage_selector),
+		"menu focus blocks global accept start shortcut"
+	)
+	hud.hide_state_overlay()
+	_assert_true(
+		hud.should_accept_shortcut_start_for_focus(stage_selector),
+		"hidden menu allows global accept start shortcut"
+	)
 	hud.free()
 	label.free()
 
