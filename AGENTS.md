@@ -59,6 +59,17 @@ CI does not build this preset yet; it only imports resources, lints, runs
 tests, and does a headless smoke load (`.github/workflows/ci.yml`). See
 `BACKLOG.md` for the planned CI build/release follow-up.
 
+## Keep docs and commits portable
+
+Never write anything security-relevant (credentials, API keys, tokens,
+internal URLs) or specific to one person's machine (absolute paths like
+`C:\Users\...` or `/home/...`, personal directory layouts, local tool
+install locations) into this repo — that includes `README.md`,
+`AGENTS.md`, `CLAUDE.md`, commit messages, and code comments. Prefer
+commands that assume a standard PATH-available tool (e.g. `godot ...`)
+over anything tied to how one contributor's environment happens to be
+set up.
+
 ## Working alongside other agents
 
 Multiple agents may be active in this repo at once, sometimes in the same

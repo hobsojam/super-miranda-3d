@@ -54,6 +54,26 @@ res://scenes/storm_preview.tscn
 
 This project is configured for the GL Compatibility renderer.
 
+## Building
+
+A "Windows Desktop" export preset is already configured in
+`export_presets.cfg`. To produce a standalone `.exe`:
+
+1. Install the Godot 4.4 export templates that match your editor (Editor >
+   Manage Export Templates).
+2. Create the output folder once, since Godot does not create it:
+   `build/windows/`.
+3. Export, either via the editor (Project > Export > Windows Desktop >
+   Export Project) or headless:
+
+   ```text
+   godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe
+   ```
+
+Embedding a custom icon and version info into the `.exe` needs `rcedit`
+configured in Editor Settings > Export > Windows; without it the export
+still succeeds, just with a generic file icon. `build/` is gitignored.
+
 ## Project Layout
 
 ```text

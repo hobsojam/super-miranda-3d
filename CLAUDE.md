@@ -44,6 +44,15 @@ icon embedding). `build/` is gitignored. CI stops at
 import/lint/test/smoke-load (`.github/workflows/ci.yml`) — building this
 preset in CI and publishing releases is on `BACKLOG.md`, not done yet.
 
+## Keep Docs And Commits Portable
+
+Never write anything security-relevant (credentials, API keys, tokens,
+internal URLs) or specific to one person's machine (absolute paths,
+personal directory layouts, local tool install locations) into this
+repo — including `README.md`, `AGENTS.md`, `CLAUDE.md`, commit messages,
+and code comments. Prefer commands that assume a standard PATH-available
+tool over anything tied to one contributor's environment.
+
 ## Architecture
 
 - `scripts/storm_stage.gd` (`StormStage`) is the per-run controller: tracks
