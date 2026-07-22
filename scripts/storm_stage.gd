@@ -230,7 +230,7 @@ func _build_stage_one() -> void:
 	var pattern: Array = [
 		[720.0, 4, "flipper"], [820.0, 12, "flipper"], [930.0, 6, "flipper"],
 		[1080.0, 2, "spiker"], [1080.0, 10, "spiker"],
-		[1260.0, 5, "tanker"], [1260.0, 6, "tanker"], [1260.0, 7, "tanker"],
+		[1260.0, 5, "splitter"], [1260.0, 6, "splitter"], [1260.0, 7, "splitter"],
 		[1510.0, 14, "flipper"], [1600.0, 13, "flipper"], [1690.0, 12, "flipper"],
 		[1900.0, 3, "spiker"], [1900.0, 11, "spiker"],
 		[2140.0, 7, "pulsar"], [2250.0, 8, "pulsar"], [2360.0, 9, "pulsar"],
@@ -249,10 +249,10 @@ func _build_stage_two() -> void:
 	_hazards.clear()
 	var pattern: Array = [
 		[650.0, 1, "flipper"], [780.0, 5, "flipper"], [910.0, 9, "flipper"], [1040.0, 13, "flipper"],
-		[1240.0, 3, "tanker"], [1240.0, 4, "tanker"], [1440.0, 11, "spiker"],
+		[1240.0, 3, "splitter"], [1240.0, 4, "splitter"], [1440.0, 11, "spiker"],
 		[1660.0, 6, "pulsar"], [1810.0, 7, "pulsar"], [1960.0, 8, "pulsar"],
 		[2220.0, 2, "exploder"], [2220.0, 10, "exploder"], [2520.0, 15, "flipper"],
-		[2820.0, 0, "tanker"]
+		[2820.0, 0, "splitter"]
 	]
 	for entry in pattern:
 		var hazard: StageHazard = StageHazard.new()
@@ -576,7 +576,7 @@ func _destroy_hazard(hazard: StageHazard) -> void:
 	hazard.cleared = true
 	_score += 250
 	_remove_marker(hazard)
-	if hazard.kind == "tanker":
+	if hazard.kind == "splitter":
 		_spawn_hazard(hazard.distance + 8.0, hazard.lane - 1, "flipper")
 		_spawn_hazard(hazard.distance + 8.0, hazard.lane + 1, "flipper")
 		_play_sfx(KILL_SOUND, -3.5)
@@ -820,11 +820,13 @@ func _build_enemy_marker(kind: String) -> Node3D:
 	var material: StandardMaterial3D = _material_for_kind(kind)
 	var accent: StandardMaterial3D = _accent_material_for_kind(kind)
 	match kind:
-		"tanker":
-			_add_box_part(marker, Vector3(2.5, 0.72, 1.35), Vector3.ZERO, Vector3.ZERO, material)
-			_add_box_part(marker, Vector3(0.32, 1.24, 1.7), Vector3(-1.15, 0.0, 0.0), Vector3.ZERO, accent)
-			_add_box_part(marker, Vector3(0.32, 1.24, 1.7), Vector3(1.15, 0.0, 0.0), Vector3.ZERO, accent)
-			_add_sphere_part(marker, 0.28, Vector3(0.0, 0.52, -0.72), material)
+		"splitter":
+			_add_sphere_part(marker, 0.62, Vector3.ZERO, material)
+			_add_prism_part(marker, Vector3(0.72, 0.48, 1.35), Vector3(-0.82, 0.0, 0.12), Vector3(0.0, 0.0, 0.65), accent)
+			_add_prism_part(marker, Vector3(0.72, 0.48, 1.35), Vector3(0.82, 0.0, 0.12), Vector3(0.0, 0.0, -0.65), accent)
+			_add_box_part(marker, Vector3(2.05, 0.12, 0.18), Vector3(0.0, 0.0, -0.2), Vector3.ZERO, accent)
+			_add_sphere_part(marker, 0.24, Vector3(-0.58, 0.36, -0.42), accent)
+			_add_sphere_part(marker, 0.24, Vector3(0.58, -0.36, -0.42), accent)
 		"spiker":
 			_add_prism_part(marker, Vector3(0.62, 0.62, 2.75), Vector3.ZERO, Vector3.ZERO, material)
 			_add_box_part(marker, Vector3(1.65, 0.08, 0.18), Vector3(0.0, 0.0, -0.35), Vector3(0.0, 0.0, 0.35), accent)
@@ -909,7 +911,7 @@ func _material_for_kind(kind: String) -> StandardMaterial3D:
 	var color: Color = Color(1.0, 0.25, 0.25)
 	var emission: Color = Color(1.0, 0.08, 0.08)
 	match kind:
-		"tanker":
+		"splitter":
 			color = Color(1.0, 0.55, 0.08)
 			emission = Color(1.0, 0.28, 0.02)
 		"spiker":
@@ -936,7 +938,7 @@ func _accent_material_for_kind(kind: String) -> StandardMaterial3D:
 	var color: Color = Color(1.0, 0.55, 1.0)
 	var emission: Color = Color(1.0, 0.15, 1.0)
 	match kind:
-		"tanker":
+		"splitter":
 			color = Color(1.0, 0.86, 0.18)
 			emission = Color(1.0, 0.62, 0.04)
 		"spiker", "spike":
