@@ -42,14 +42,23 @@ much the player already knows coming in from prior stages.
    like "I made it," not like a bug. A pickup, a breather, a single easy and
    familiar beat — something that lets the player exhale and feel rewarded
    — works better than dead space, which just reads as the stage having
-   nothing left to show. The contrast with phase 5 is the point: the drop
-   only pays off if the player believes it.
+   nothing left to show. Rewards aren't exclusive to this phase — hand out
+   pickups anywhere they earn their keep (a defensive tool ahead of an
+   escalate section, for instance) — but phase 4 is where a reward carries
+   the most weight, because it's positioned as "you made it this far." The
+   contrast with phase 5 is the point: the drop only pays off if the player
+   believes it.
 
-5. **Fight to the finish** — maximum density, combining everything the
-   stage has introduced. This should end at something the player can see
-   and aim for, not just a number ticking over. A gate (existing mechanic)
-   is the natural finish line; a stage that has no gate mechanic yet is
-   worth reconsidering rather than defaulting to "the road just stops."
+5. **Fight to the finish** — the requirement is a real challenge climax:
+   enemies, hazards, pressure, at the stage's highest density. That's what
+   phase 5 *means*. A gate, a portal, a boss, or some other capstone
+   encounter are all valid ways to also give the climax a visible shape and
+   a moment to aim at, and worth considering — but none of them is the
+   definition, and a stage doesn't need one to nail phase 5. Density and
+   combination alone are enough, as long as it reads as a deliberate spike.
+   What phase 5 must not be is anticlimactic: a bare distance check with
+   nothing happening is the one failure mode to avoid, independent of
+   whether any capstone mechanic is in play.
 
 ## Applying it to a stage
 
@@ -66,18 +75,27 @@ authoring or reviewing a stage:
   *this* stage even if it existed in an earlier one (e.g. Stage 2
   introducing gates is new to Stage 2 even though Stage 1 already had every
   enemy kind).
+- Rewards aren't pinned to phase 4 specifically — place a pickup wherever
+  it earns its keep along the curve. Phase 4 is just the one place a reward
+  is guaranteed to land, because that's what makes it a false summit rather
+  than a random lull.
 - Check the shape by reading the stage definition file as a distance-sorted
   list and asking: where's the empty runway, where's the first unfamiliar
-  thing, where does it combine with what's known, where's the exhale, where
-  does it peak, and what's the player looking at when it ends?
+  thing, where does it combine with what's known, where's the exhale, and
+  where does it peak? "What's the player looking at when it ends" only
+  matters if the stage actually has a capstone mechanic — density alone can
+  carry phase 5 just as well.
 
-## Current gap (Stage 1)
+## Applied example (Stage 1)
 
-Stage 1 already has phase 1 (empty 0–720) and a rough version of phases 2–3
-(flipper → spiker → splitter → pulsar → exploder, each debuting alone
-before the mix at the end). It's missing phase 4: the run from the
-`exploder` pair at 2600 straight into the final flipper/splitter/pulsar/
-exploder mix at 2860 leaves no false-summit beat, so the finale reads as a
-continuation of rising density rather than a deliberate spike. It also ends
-on a bare route-length check with no gate, so there's nothing to aim at when
-phase 5 resolves. See `BACKLOG.md` for other open stage-content decisions.
+Stage 1's original layout only nailed phase 1 (empty 0–720); every enemy
+kind was introduced and escalated back-to-back with no lull, and it ended
+on a flat distance check. It's since been rebalanced to hit all five
+phases: each kind (flipper → spiker → splitter → pulsar → exploder) gets
+its own solo debut with real spacing, phase 3 combines flipper + spiker
+before pulsar/exploder are introduced, phase 4 thins out to one easy
+flipper plus the `life` pickup as a reward beat, and phase 5 combines
+everything at higher density than before. There's still no gate — density
+and combination alone carry the climax, which is the point: phase 5 didn't
+need a capstone mechanic to land. See `scripts/stage_one_definition.gd` and
+`BACKLOG.md` for any remaining open stage-content decisions.
