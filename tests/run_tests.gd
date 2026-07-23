@@ -11,6 +11,7 @@ const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd
 const StagePickupRuntimeScript := preload("res://scripts/stage_pickup_runtime.gd")
 const StageProjectileRuntimeScript := preload("res://scripts/stage_projectile_runtime.gd")
 const EnemySkillRuntimeScript := preload("res://scripts/enemy_skill_runtime.gd")
+const StageFlowRuntimeScript := preload("res://scripts/stage_flow_runtime.gd")
 const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
@@ -29,6 +30,7 @@ func _initialize() -> void:
 	_test_pickup_runtime()
 	_test_projectile_runtime()
 	_test_enemy_skill_runtime()
+	_test_stage_flow_runtime()
 	_test_player_fire_intent()
 
 	if _failures == 0:
@@ -415,6 +417,65 @@ func _test_enemy_skill_runtime() -> void:
 		skills.update(flipper, 1.0, 0.0, 1000.0).is_empty(),
 		"non-skill hazards produce no event"
 	)
+
+func _test_stage_flow_runtime() -> void:
+	var flow: StageFlowRuntime = StageFlowRuntimeScript.new()
+
+	flow.start_stage(5)
+	_assert_eq(flow.stage, 2, "start_stage clamps to the max stage")
+	_assert_true(flow.run_active, "start_stage activates the run")
+	_assert_true(not flow.game_over, "start_stage clears game over")
+	_assert_true(not flow.game_complete, "start_stage clears game complete")
+	_assert_float_eq(flow.stage_elapsed_time, 0.0, "start_stage resets elapsed time")
+	_assert_float_eq(flow.stage_transition_timer, 0.0, "start_stage resets transition timer")
+	_assert_eq(flow.pending_stage, 0, "start_stage clears pending stage")
+	_assert_eq(flow.last_stage_time_bonus, 0, "start_stage clears last time bonus")
+
+	flow.start_stage(0)
+	_assert_eq(flow.stage, 1, "start_stage clamps below the min stage")
+	_assert_true(not flow.is_run_blocked(), "active run is not blocked")
+	_assert_eq(flow.status_label(), "", "active run has no status override")
+
+	flow.tick(0.5)
+	_assert_float_eq(flow.stage_elapsed_time, 0.5, "tick accumulates elapsed time")
+
+	flow.stage_elapsed_time = 90.0
+	flow.begin_stage_clear_transition(2, 1.85)
+	_assert_eq(flow.last_stage_time_bonus, 2500, "transition computes the stage clear bonus")
+	_assert_eq(flow.pending_stage, 2, "transition records the pending stage")
+	_assert_float_eq(flow.stage_transition_timer, 1.85, "transition starts the countdown")
+	_assert_true(not flow.run_active, "transition deactivates the run")
+	_assert_true(flow.is_run_blocked(), "blocked while transitioning")
+	_assert_eq(flow.status_label(), "STAGE CLEAR", "status shows stage clear during transition")
+
+	_assert_true(not flow.tick_transition(1.0), "transition has not finished yet")
+	_assert_float_eq(flow.stage_transition_timer, 0.85, "transition timer counts down")
+	_assert_true(flow.tick_transition(1.0), "transition reports completion")
+	_assert_float_eq(flow.stage_transition_timer, 0.0, "transition timer floors at zero")
+
+	_assert_true(flow.continue_to_pending(), "continues into the pending stage")
+	_assert_eq(flow.stage, 2, "continuing moves to the pending stage")
+	_assert_eq(flow.pending_stage, 0, "continuing clears the pending stage")
+	_assert_float_eq(flow.stage_elapsed_time, 0.0, "continuing resets elapsed time")
+	_assert_true(flow.run_active, "continuing reactivates the run")
+	_assert_true(not flow.continue_to_pending(), "continuing again with no pending stage is a no-op")
+
+	flow.stage_elapsed_time = 180.0
+	flow.complete_run()
+	_assert_eq(flow.last_stage_time_bonus, 0, "completing the run computes the final bonus")
+	_assert_true(flow.game_over, "completing the run sets game over")
+	_assert_true(flow.game_complete, "completing the run sets game complete")
+	_assert_true(not flow.run_active, "completing the run deactivates it")
+	_assert_eq(flow.status_label(), "CLEAR", "status shows clear on completion")
+
+	var fresh: StageFlowRuntime = StageFlowRuntimeScript.new()
+	_assert_eq(fresh.status_label(), "READY", "idle run before start shows ready")
+	_assert_true(fresh.trigger_game_over(), "first game over trigger succeeds")
+	_assert_true(not fresh.trigger_game_over(), "repeated game over trigger is a no-op")
+	_assert_true(fresh.game_over, "game over sets the flag")
+	_assert_true(not fresh.game_complete, "game over without completion is not a clear")
+	_assert_true(not fresh.run_active, "game over deactivates the run")
+	_assert_eq(fresh.status_label(), "GAME OVER", "status shows game over")
 
 func _test_player_fire_intent() -> void:
 	var player: StormPlayer = StormPlayerScript.new()
