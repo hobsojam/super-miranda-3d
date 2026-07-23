@@ -134,6 +134,23 @@ func _test_stage_hud() -> void:
 	hud.update_status(1, 1200, 15, 2500, 2, 1, 4, 38, "RUNNING")
 	_assert_true(label.text.ends_with("RUNNING"), "hud status resumes after notice expires")
 
+	_assert_float_eq(
+		StageHudScript.pickup_banner_alpha(1.3), 1.0, "banner holds full alpha before fade window"
+	)
+	_assert_float_eq(
+		StageHudScript.pickup_banner_alpha(0.2), 0.5, "banner fades linearly near expiry"
+	)
+	_assert_float_eq(
+		StageHudScript.pickup_banner_alpha(0.0), 0.0, "banner is transparent once expired"
+	)
+
+	var banner: Label = hud.find_child("PickupBanner", true, false) as Label
+	hud.flash_pickup("CLEARANCE PULSE", Color(0.3, 1.0, 1.0))
+	_assert_true(banner.visible, "pickup banner becomes visible on flash")
+	_assert_eq(banner.text, "CLEARANCE PULSE", "pickup banner shows the collected pickup text")
+	hud.tick_pickup_banner(StageHudScript.PICKUP_BANNER_TIME + 0.1)
+	_assert_true(not banner.visible, "pickup banner hides after it fully expires")
+
 	var stage_selector: OptionButton = hud.find_child("StageSelector", true, false) as OptionButton
 	_assert_true(
 		hud.has_state_control_focus_owner(stage_selector),
