@@ -55,9 +55,24 @@ touching anything under `scripts/`.
   `rcedit` tool — Godot 4.7's Windows exporter embeds it natively.
 - `build/` is gitignored — exported binaries are never committed.
 
-CI does not build this preset yet; it only imports resources, lints, runs
-tests, and does a headless smoke load (`.github/workflows/ci.yml`). See
-`BACKLOG.md` for the planned CI build/release follow-up.
+CI builds this preset too, on every push and pull request, and uploads the
+`.exe` as a workflow artifact (`.github/workflows/ci.yml`'s `windows-build`
+job) — useful for playtesting a PR without a local export template setup.
+Automated GitHub Releases on version tags are still on `BACKLOG.md`.
+
+## Versioning
+
+Releases are tagged `vMAJOR.MINOR.PATCH` (semver with a `v` prefix). The
+`0.1` tag predates this scheme and was never used for a release — ignore
+it.
+
+When wrapping up a PR or session that changes what a player would notice
+in a build (new stage content, gameplay-affecting balance changes, new
+features), mention to the user that a version bump may be worth cutting,
+and suggest a MAJOR/MINOR/PATCH level based on the size of the change.
+Don't create or push a version tag without the user confirming the exact
+version number first — cutting a release is a user decision, not
+something to automate.
 
 ## Keep docs and commits portable
 

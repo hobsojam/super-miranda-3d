@@ -40,9 +40,15 @@ touching anything under `scripts/`.
 export templates first, create the output directory (Godot won't), then:
 `godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe`.
 See `AGENTS.md` for the full setup steps (export templates). `build/` is
-gitignored. CI stops at
-import/lint/test/smoke-load (`.github/workflows/ci.yml`) — building this
-preset in CI and publishing releases is on `BACKLOG.md`, not done yet.
+gitignored. CI also builds this preset on every push/PR and uploads the
+`.exe` as a workflow artifact; publishing GitHub Releases on version tags
+is still on `BACKLOG.md`.
+
+## Versioning
+
+Releases are tagged `vMAJOR.MINOR.PATCH`. See `AGENTS.md` for when to
+suggest a version bump — never create or push a tag without the user
+confirming the version number first.
 
 ## Keep Docs And Commits Portable
 
