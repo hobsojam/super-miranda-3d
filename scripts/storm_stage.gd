@@ -81,6 +81,7 @@ func _process(delta: float) -> void:
 	_update_music_intensity(delta)
 	_damage_invulnerability_timer = maxf(_damage_invulnerability_timer - delta, 0.0)
 	_hud.tick_notice(delta)
+	_hud.tick_pickup_banner(delta)
 
 	if _stage_transition_timer > 0.0:
 		_stage_transition_timer = maxf(_stage_transition_timer - delta, 0.0)
@@ -156,6 +157,7 @@ func _start_stage(stage: int) -> void:
 	_run_active = true
 	_damage_invulnerability_timer = 0.0
 	_hud.clear_notice()
+	_hud.clear_pickup_banner()
 	_stage_elapsed_time = 0.0
 	_stage_transition_timer = 0.0
 	_pending_stage = 0
@@ -398,6 +400,7 @@ func _continue_to_pending_stage() -> void:
 	_stage_elapsed_time = 0.0
 	_damage_invulnerability_timer = 0.0
 	_hud.clear_notice()
+	_hud.clear_pickup_banner()
 	_runner.restart_run()
 	_runner.set_input_enabled(true)
 	_player.set_fire_enabled(true)
@@ -508,11 +511,13 @@ func _collect_pickup(pickup: StagePickupRuntime.Pickup) -> void:
 			lives += 1
 			_score += 500
 			_hud.show_notice("EXTRA LIFE")
+			_hud.flash_pickup("EXTRA LIFE", Color(0.45, 1.0, 0.55))
 			_play_sfx(StageAudio.CLEAR_SOUND, -8.0)
 		"purge":
 			_score += 750
 			_purge_rim_obstacles()
 			_hud.show_notice("CLEARANCE PULSE")
+			_hud.flash_pickup("CLEARANCE PULSE", Color(0.3, 1.0, 1.0))
 			_play_sfx(StageAudio.EXPLODER_SOUND, -8.0)
 
 func _destroy_pickup(pickup: StagePickupRuntime.Pickup) -> void:

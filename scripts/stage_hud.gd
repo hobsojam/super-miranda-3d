@@ -6,6 +6,8 @@ signal exit_pressed
 signal stage_selected(stage: int)
 
 const NOTICE_TIME := 1.15
+const PICKUP_BANNER_TIME := 1.3
+const PICKUP_BANNER_FADE_TIME := 0.4
 
 var selected_start_stage: int = 1
 
@@ -19,6 +21,11 @@ var _state_primary_button: Button
 var _state_secondary_button: Button
 var _notice: String = ""
 var _notice_timer: float = 0.0
+var _pickup_banner: Label
+var _pickup_banner_timer: float = 0.0
+
+static func pickup_banner_alpha(timer: float) -> float:
+	return clampf(timer / PICKUP_BANNER_FADE_TIME, 0.0, 1.0)
 
 static func status_text(
 	stage: int,
@@ -51,6 +58,7 @@ func setup(hud_label: Label) -> void:
 	layer = 20
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_state_overlay()
+	_build_pickup_banner()
 
 func tick_notice(delta: float) -> void:
 	_notice_timer = maxf(_notice_timer - delta, 0.0)
@@ -62,6 +70,26 @@ func clear_notice() -> void:
 func show_notice(text: String) -> void:
 	_notice = text
 	_notice_timer = NOTICE_TIME
+
+func tick_pickup_banner(delta: float) -> void:
+	_pickup_banner_timer = maxf(_pickup_banner_timer - delta, 0.0)
+	if _pickup_banner:
+		var alpha: float = pickup_banner_alpha(_pickup_banner_timer)
+		_pickup_banner.modulate.a = alpha
+		_pickup_banner.visible = alpha > 0.0
+
+func clear_pickup_banner() -> void:
+	_pickup_banner_timer = 0.0
+	if _pickup_banner:
+		_pickup_banner.visible = false
+
+func flash_pickup(text: String, color: Color) -> void:
+	_pickup_banner_timer = PICKUP_BANNER_TIME
+	if _pickup_banner:
+		_pickup_banner.text = text
+		_pickup_banner.add_theme_color_override("font_color", color)
+		_pickup_banner.modulate.a = 1.0
+		_pickup_banner.visible = true
 
 func show_start_screen() -> void:
 	_state_title.text = "MIRANDA"
@@ -237,6 +265,22 @@ func _build_state_overlay() -> void:
 	_state_secondary_button.text = "Exit"
 	_state_secondary_button.pressed.connect(func() -> void: exit_pressed.emit())
 	box.add_child(_state_secondary_button)
+
+func _build_pickup_banner() -> void:
+	var banner: Label = Label.new()
+	banner.name = "PickupBanner"
+	banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	banner.offset_top = 64.0
+	banner.offset_left = -220.0
+	banner.offset_right = 220.0
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.add_theme_font_size_override("font_size", 30)
+	banner.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))
+	banner.add_theme_constant_override("outline_size", 6)
+	banner.visible = false
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(banner)
+	_pickup_banner = banner
 
 func _state_panel_style() -> StyleBoxFlat:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
