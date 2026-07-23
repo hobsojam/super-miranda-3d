@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Build and publish Windows release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      GODOT_VERSION: "4.7.1"
+      GODOT_RELEASE: "stable"
+      GODOT_BINARY: Godot_v4.7.1-stable_linux.x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache Godot editor and export templates
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            godot
+            export_templates.tpz
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-linux
+
+      - name: Install Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          curl --fail --location --output godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/${GODOT_BINARY}.zip"
+          unzip -q godot.zip -d godot
+
+      - name: Download export templates
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          curl --fail --location --output export_templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-${GODOT_RELEASE}_export_templates.tpz"
+
+      - name: Add Godot to PATH
+        run: |
+          chmod +x "godot/${GODOT_BINARY}"
+          echo "$PWD/godot" >> "$GITHUB_PATH"
+
+      - name: Install export templates
+        run: |
+          template_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+          mkdir -p "${template_dir}"
+          unzip -q export_templates.tpz -d /tmp/godot_templates
+          cp -r /tmp/godot_templates/templates/. "${template_dir}/"
+
+      - name: Import project resources
+        run: |
+          "${GODOT_BINARY}" --headless --path . --import
+
+      - name: Export Windows build
+        run: |
+          mkdir -p build/windows
+          "${GODOT_BINARY}" --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe
+
+      - name: Verify build output
+        run: |
+          test -f build/windows/super-miranda-3d.exe
+
+      - name: Package release zip
+        run: |
+          zip_name="super-miranda-3d-windows-${GITHUB_REF_NAME}.zip"
+          zip -j "${zip_name}" build/windows/super-miranda-3d.exe
+          echo "ZIP_NAME=${zip_name}" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" "${ZIP_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
