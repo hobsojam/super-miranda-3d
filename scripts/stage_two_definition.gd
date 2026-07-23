@@ -13,7 +13,11 @@ extends RefCounted
 const ROUTE_STEP := 12.0
 
 const CORKSCREW_REVOLUTIONS := 8.0
-const CORKSCREW_RADIUS := 20.0
+# Radius 75 (diameter 150) with this arc length gives ~100 units of descent
+# per loop - a middle ground between the original tight-drill proportions
+# (diameter 40, ~280/loop) and a flat, snake-like coil (diameter 280,
+# ~40/loop), which would have required tripling the route's length.
+const CORKSCREW_RADIUS := 75.0
 # The corkscrew's travel distance (arc length), held fixed regardless of how
 # many revolutions or what radius it's tuned to. Distance is what hazards,
 # gates, and stage pacing are actually keyed to, so retuning how tightly it
@@ -21,10 +25,11 @@ const CORKSCREW_RADIUS := 20.0
 # the same wire length just spans more downward space. The descent depth
 # is derived from this and the current revolutions/radius, not the other
 # way around (see _corkscrew_points).
-const CORKSCREW_ARC_LENGTH := 2460.0
-# How many of the leading revolutions ease the radius in from 0 to full,
-# smoothstep-eased, instead of snapping straight to full amplitude - avoids
-# a sudden ~60 degree tangent swing right at the gentle-slope handoff.
+const CORKSCREW_ARC_LENGTH := 3854.0
+# How many of the leading revolutions ease the radius AND descent rate in
+# from 0 to full, smoothstep-eased, instead of snapping straight to full
+# amplitude/speed - avoids a sudden, large tangent swing right at the
+# gentle-slope handoff (see _corkscrew_points for why both need easing).
 const CORKSCREW_RAMP_REVOLUTIONS := 1.0
 const CORKSCREW_RING_SAMPLES := 640
 
@@ -107,15 +112,35 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 		maxf(CORKSCREW_ARC_LENGTH * CORKSCREW_ARC_LENGTH - circumferential * circumferential, 0.0)
 	)
 	var fine_steps: int = 4000
-	var points: PackedVector3Array = PackedVector3Array()
-	var last_emitted: Vector3 = start
-	var accumulated: float = 0.0
+	# The lateral radius eases in from 0 via eased_ramp, but a plain linear
+	# `t * descent_length` for y does NOT ease in - it starts at full
+	# descent speed from t=0. With a wide radius, that meant the path
+	# snapped almost immediately from "mostly forward" to "mostly straight
+	# down" while the sideways swing was still near zero, before the ramp
+	# had contributed any real lateral motion to blend it with - measured
+	# as a genuine 150+ degree direction change right at the handoff, not
+	# a sampling artifact (confirmed by testing fine_steps up to 150000
+	# with no change, and by testing longer ramp windows with no change -
+	# only easing y's own rate, not just radius, fixed it). Pre-summing the
+	# ramp weight lets y's rate follow the same ease curve as radius while
+	# still totaling exactly descent_length by the end.
+	var ramp_weight_sum: float = 0.0
 	for i in range(1, fine_steps + 1):
 		var t: float = float(i) / float(fine_steps)
 		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
-		var y: float = start.y + t * descent_length
+		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
+		ramp_weight_sum += ramp * ramp * (3.0 - 2.0 * ramp)
+	var points: PackedVector3Array = PackedVector3Array()
+	var last_emitted: Vector3 = start
+	var accumulated: float = 0.0
+	var ramp_weight_accum: float = 0.0
+	for i in range(1, fine_steps + 1):
+		var t: float = float(i) / float(fine_steps)
+		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
 		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
 		var eased_ramp: float = ramp * ramp * (3.0 - 2.0 * ramp)
+		ramp_weight_accum += eased_ramp
+		var y: float = start.y + descent_length * (ramp_weight_accum / ramp_weight_sum)
 		var radius: float = CORKSCREW_RADIUS * eased_ramp
 		var candidate: Vector3 = Vector3(radius * cos(angle), y, start.z + radius * sin(angle))
 		accumulated += last_emitted.distance_to(candidate)
