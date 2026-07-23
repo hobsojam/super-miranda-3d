@@ -69,6 +69,24 @@ tool over anything tied to one contributor's environment.
   spline from whichever control points it's given via `rebuild_route()`;
   `scripts/storm_camera.gd` reads progress along it. `scripts/storm_player.gd`
   is the lane-locked player ship.
+- **Route control-point axes don't map to screen directions the way you'd
+  expect, and that mapping isn't even constant along a route.**
+  `StormTube`'s local `right`/`up` frame is rotation-minimizing (parallel-
+  transported: each sample's `right` is the previous sample's `right`
+  projected onto the new tangent plane, no extra twist added), starting
+  from a hardcoded `right = world +X` — which works out to `up = world -Y`
+  at the route's start. So a stage's control points using raw `+X`/`+Y`
+  offsets do not correspond to screen-right/screen-up; verify empirically
+  (replicate `storm_camera.gd`'s pose + `look_at` math — e.g.
+  `Transform3D().looking_at(...)`, not `Node3D.look_at()` on a node outside
+  the tree, which silently no-ops) rather than assuming. The mapping also
+  isn't fixed along the route: the frame rotates as the path curves, so it
+  stays close to constant across one bounded bend (well under a full turn)
+  but cycles through a full rotation once per revolution on anything that
+  spirals further than that — which is why an early multi-revolution
+  corkscrew route shape read as repeatedly flipping direction with no
+  actual bug in its construction (see `scripts/stage_two_definition.gd`'s
+  git history for the debugging trail).
 - Stage content is plain data: `scripts/stage_one_definition.gd` and
   `scripts/stage_two_definition.gd` each return a `route()` control-point
   array plus arrays of `{distance, lane, kind}` hazards/pickups/gate pairs
