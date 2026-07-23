@@ -24,6 +24,8 @@ const KILL_SOUND := preload("res://audio/sfx/enemy_killed.wav")
 const CLEAR_SOUND := preload("res://audio/sfx/stage_clear.wav")
 const GAME_OVER_SOUND := preload("res://audio/sfx/game_over.wav")
 const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
+const LIFE_PICKUP_SOUND := preload("res://audio/sfx/pickup_life.wav")
+const PURGE_PICKUP_SOUND := preload("res://audio/sfx/pickup_purge.wav")
 
 var _base_player: AudioStreamPlayer
 var _drums_high_player: AudioStreamPlayer
