@@ -2,9 +2,15 @@ class_name StageTwoDefinition
 extends RefCounted
 
 const CORKSCREW_REVOLUTIONS := 25.0
-const CORKSCREW_RADIUS := 14.0
+const CORKSCREW_RADIUS := 20.0
 const CORKSCREW_LENGTH := 1220.0
 const ROUTE_RING_SAMPLES := 640
+
+# How many of the leading revolutions ease the radius in from 0 to full,
+# smoothstep-eased, instead of snapping straight to full amplitude. Without
+# this the entry from the gentle slope into the corkscrew is a sudden ~60
+# degree tangent swing in a single sample - felt like a wall, not a turn.
+const CORKSCREW_RAMP_REVOLUTIONS := 3.0
 
 # This engine's Catmull-Rom uses uniform, index-based parametrization (see
 # StormTube._catmull_rom): it assumes each control-point-to-control-point
@@ -57,10 +63,13 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 		var t: float = float(i) / float(point_count)
 		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
 		var z: float = start.z - t * CORKSCREW_LENGTH
+		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
+		var eased_ramp: float = ramp * ramp * (3.0 - 2.0 * ramp)
+		var radius: float = CORKSCREW_RADIUS * eased_ramp
 		points.append(
 			Vector3(
-				CORKSCREW_RADIUS * cos(angle),
-				start.y + CORKSCREW_RADIUS * sin(angle),
+				radius * cos(angle),
+				start.y + radius * sin(angle),
 				z
 			)
 		)
