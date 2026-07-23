@@ -30,7 +30,12 @@ const CORKSCREW_ARC_LENGTH := 3854.0
 # from 0 to full, smoothstep-eased, instead of snapping straight to full
 # amplitude/speed - avoids a sudden, large tangent swing right at the
 # gentle-slope handoff (see _corkscrew_points for why both need easing).
-const CORKSCREW_RAMP_REVOLUTIONS := 1.0
+# Shorter is better here, counterintuitively: measured max tangent swing
+# across the whole route was 27.6 degrees at 0.5, but rose to 70.4 degrees
+# at 2.0 revolutions - a longer ramp holds the path closer to the seam
+# tangent for longer before the coil's own curvature takes over, which
+# sharpens the handoff once it does rather than softening it.
+const CORKSCREW_RAMP_REVOLUTIONS := 0.5
 const CORKSCREW_RING_SAMPLES := 640
 
 static func route() -> PackedVector3Array:
@@ -142,7 +147,18 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 		ramp_weight_accum += eased_ramp
 		var y: float = start.y + descent_length * (ramp_weight_accum / ramp_weight_sum)
 		var radius: float = CORKSCREW_RADIUS * eased_ramp
-		var candidate: Vector3 = Vector3(radius * cos(angle), y, start.z + radius * sin(angle))
+		# angle is offset by PI so the coil's initial tangential direction
+		# continues the incoming -Z travel direction instead of starting
+		# backward: with no offset, d/dangle of (cos(angle), sin(angle)) at
+		# angle=0 points toward +Z (back the way we came), so the coil had
+		# to wind through roughly a quarter turn before its motion actually
+		# resumed heading forward - measured as a real ~94 degree reversal
+		# right at the seam (the corkscrew's first raw point landed at
+		# z=-599, less negative/further back than the slope's z=-610
+		# endpoint it started from), not just a numerical artifact.
+		var candidate: Vector3 = Vector3(
+			-radius * cos(angle), y, start.z - radius * sin(angle)
+		)
 		accumulated += last_emitted.distance_to(candidate)
 		last_emitted = candidate
 		if accumulated >= ROUTE_STEP or i == fine_steps:
