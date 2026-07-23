@@ -51,13 +51,8 @@ touching anything under `scripts/`.
 - Create the output directory before exporting — Godot does not create it:
   `mkdir -p build/windows`, then
   `godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe`.
-- Embedding the icon/version info into the `.exe` needs `rcedit`
-  (Editor Settings > Export > Windows > Rcedit). Without it, the export
-  still succeeds and the `.exe` gets a generic Explorer icon instead of
-  the configured one — on Godot 4.4 this showed as an explicit warning in
-  the export log, but on 4.7.1 the same missing-rcedit case is skipped
-  silently with no warning at all, so don't take a clean export log as
-  proof the icon was actually embedded.
+- Icon/version info embedding into the `.exe` no longer needs the external
+  `rcedit` tool — Godot 4.7's Windows exporter embeds it natively.
 - `build/` is gitignored — exported binaries are never committed.
 
 CI does not build this preset yet; it only imports resources, lints, runs
