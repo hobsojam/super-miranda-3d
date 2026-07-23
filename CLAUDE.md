@@ -9,10 +9,11 @@ open project decisions, plus setup, test, lint, and build commands. If
 
 Super Miranda 3D is a Godot 4.7 lane-based arcade shooter inspired by
 Tempest, framed as forward motion through a neon tunnel called the Storm.
-The player slides between 16 lanes on the rim of a fixed tube route and
-fires straight down the current lane; enemies that reach the rim without
-being destroyed become anchored obstacles that grow the hazard field. See
-`README.md` for the full player-facing description.
+The player slides between 16 lanes on the rim of a tube route (each stage
+authors its own route shape) and fires straight down the current lane;
+enemies that reach the rim without being destroyed become anchored
+obstacles that grow the hazard field. See `README.md` for the full
+player-facing description.
 
 ## Setup
 
@@ -64,14 +65,38 @@ tool over anything tied to one contributor's environment.
 - `scripts/storm_stage.gd` (`StormStage`) is the per-run controller: tracks
   distance along the route, drives stage transitions, and owns the
   extracted runtimes below.
-- `scripts/storm_tube.gd` (`StormTube`) builds a fixed, hand-authored
-  Catmull-Rom spline once; `scripts/storm_camera.gd` reads progress along
-  it. `scripts/storm_player.gd` is the lane-locked player ship.
+- `scripts/storm_tube.gd` (`StormTube`) builds a hand-authored Catmull-Rom
+  spline from whichever control points it's given via `rebuild_route()`;
+  `scripts/storm_camera.gd` reads progress along it. `scripts/storm_player.gd`
+  is the lane-locked player ship.
+- **Route control-point axes don't map to screen directions the way you'd
+  expect, and that mapping isn't even constant along a route.**
+  `StormTube`'s local `right`/`up` frame is rotation-minimizing (parallel-
+  transported: each sample's `right` is the previous sample's `right`
+  projected onto the new tangent plane, no extra twist added), starting
+  from a hardcoded `right = world +X` — which works out to `up = world -Y`
+  at the route's start. So a stage's control points using raw `+X`/`+Y`
+  offsets do not correspond to screen-right/screen-up; verify empirically
+  (replicate `storm_camera.gd`'s pose + `look_at` math — e.g.
+  `Transform3D().looking_at(...)`, not `Node3D.look_at()` on a node outside
+  the tree, which silently no-ops) rather than assuming. The mapping also
+  isn't fixed along the route: the frame rotates as the path curves, so it
+  stays close to constant across one bounded bend (well under a full turn)
+  but cycles through a full rotation once per revolution on anything that
+  spirals further than that — which is why an early multi-revolution
+  corkscrew route shape read as repeatedly flipping direction with no
+  actual bug in its construction (see `scripts/stage_two_definition.gd`'s
+  git history for the debugging trail).
 - Stage content is plain data: `scripts/stage_one_definition.gd` and
-  `scripts/stage_two_definition.gd` each return arrays of
-  `{distance, lane, kind}` hazards/pickups/gate pairs that `StormStage`
-  consumes — adding stage content means editing these arrays, not engine
-  code.
+  `scripts/stage_two_definition.gd` each return a `route()` control-point
+  array plus arrays of `{distance, lane, kind}` hazards/pickups/gate pairs
+  that `StormStage` consumes — adding stage content or reshaping a stage's
+  tube means editing these, not engine code. `StormStage` calls
+  `_storm.rebuild_route(_stage_route(stage))` at every stage
+  start/continue/preview transition, so each stage can have a physically
+  different route; nothing downstream (hazards, pickups, markers, rim
+  obstacles) needs to know the shape, since everything is addressed by
+  `(distance, lane)` through `StormTube.sample_at_distance()`.
 - Per-run state is split into extracted runtime classes, each following the
   same extraction pattern out of `storm_stage.gd`:
   `scripts/stage_hazard_runtime.gd`, `scripts/stage_pickup_runtime.gd`,

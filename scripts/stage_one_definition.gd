@@ -1,6 +1,42 @@
 class_name StageOneDefinition
 extends RefCounted
 
+static func route() -> PackedVector3Array:
+	# Each point is deliberately modest in lateral displacement: the player
+	# should feel a succession of readable corners, not lose the route behind
+	# an opaque wall.
+	return PackedVector3Array(
+		[
+			Vector3(0, 0, 0),
+			Vector3(0, 0, -70),
+			Vector3(30, 12, -145),
+			Vector3(78, -8, -220),
+			Vector3(48, -40, -305),
+			Vector3(-20, -28, -390),
+			Vector3(-62, 16, -480),
+			Vector3(-24, 48, -575),
+			Vector3(44, 22, -665),
+			Vector3(66, -24, -755),
+			Vector3(18, -48, -850),
+			Vector3(-35, -10, -940),
+			Vector3(-72, 28, -1040),
+			Vector3(-18, 58, -1155),
+			Vector3(58, 34, -1275),
+			Vector3(86, -20, -1405),
+			Vector3(22, -60, -1540),
+			Vector3(-54, -34, -1680),
+			Vector3(-88, 22, -1835),
+			Vector3(-28, 66, -1990),
+			Vector3(54, 46, -2155),
+			Vector3(92, -18, -2325),
+			Vector3(30, -66, -2505),
+			Vector3(-62, -38, -2685),
+			Vector3(-96, 30, -2870),
+			Vector3(-18, 72, -3060),
+			Vector3(68, 38, -3250),
+		]
+	)
+
 static func hazards() -> Array[Dictionary]:
 	return [
 		# Phase 1 (0-680): orientation, deliberately empty.
@@ -78,6 +114,9 @@ static func gate_pairs() -> Array[Dictionary]:
 
 static func guide_overdraw_enabled() -> bool:
 	return true
+
+static func ring_samples() -> int:
+	return 220
 
 static func _hazard(distance: float, lane: int, kind: String) -> Dictionary:
 	return {"distance": distance, "lane": lane, "kind": kind}

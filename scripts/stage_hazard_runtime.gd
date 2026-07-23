@@ -50,6 +50,9 @@ func setup(
 	_pulsar_fire_interval = pulsar_fire_interval
 	_spiker_lane_step_interval = spiker_lane_step_interval
 
+func set_stage_end_distance(stage_end_distance: float) -> void:
+	_stage_end_distance = maxf(stage_end_distance, 1.0)
+
 func clear() -> void:
 	_hazards.clear()
 
