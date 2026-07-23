@@ -54,23 +54,29 @@ static func _gentle_slope_points() -> PackedVector3Array:
 	)
 
 static func _helix_bend_points(start: Vector3) -> PackedVector3Array:
-	# One continuous, monotonic bend to the right (x keeps increasing) and
-	# down (y keeps decreasing) as the route advances (z keeps decreasing) -
-	# no reversal, no wrapping around past a quarter turn's worth of visual
-	# banking. Lateral offset grows much faster than forward depth here
-	# (finishes at roughly 1000 units of sideways+down travel over only 670
-	# forward) for a total direction change of about 56 degrees end to end -
-	# a pronounced, unmistakable bend, still nowhere near a quarter turn.
+	# One continuous, monotonic bend that reads on screen as right and down
+	# as the route advances (z keeps decreasing) - no reversal, no wrapping
+	# around past a quarter turn's worth of visual banking. World +X and
+	# world -Y here are screen-LEFT and screen-UP, not right/down: the
+	# route's local "up" starts as tangent.cross(right) with right hardcoded
+	# to world +X, which works out to world -Y at the route's start - so
+	# this segment deliberately moves toward world -X and world +Y to land
+	# on screen-right/screen-down (verified directly against the camera's
+	# actual look_at basis, not assumed). Lateral offset grows much faster
+	# than forward depth here (finishes at roughly 1000 units of
+	# sideways+down travel over only 670 forward) for a total direction
+	# change of about 56 degrees end to end - a pronounced, unmistakable
+	# bend, still nowhere near a quarter turn.
 	return PackedVector3Array(
 		[
-			start + Vector3(60.0, -25.0, -60.0),
-			start + Vector3(150.0, -65.0, -140.0),
-			start + Vector3(270.0, -120.0, -230.0),
-			start + Vector3(410.0, -190.0, -330.0),
-			start + Vector3(560.0, -270.0, -430.0),
-			start + Vector3(710.0, -350.0, -530.0),
-			start + Vector3(830.0, -410.0, -610.0),
-			start + Vector3(900.0, -450.0, -670.0),
+			start + Vector3(-60.0, 25.0, -60.0),
+			start + Vector3(-150.0, 65.0, -140.0),
+			start + Vector3(-270.0, 120.0, -230.0),
+			start + Vector3(-410.0, 190.0, -330.0),
+			start + Vector3(-560.0, 270.0, -430.0),
+			start + Vector3(-710.0, 350.0, -530.0),
+			start + Vector3(-830.0, 410.0, -610.0),
+			start + Vector3(-900.0, 450.0, -670.0),
 		]
 	)
 
