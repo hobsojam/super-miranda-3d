@@ -70,7 +70,10 @@ tool over anything tied to one contributor's environment.
   same extraction pattern out of `storm_stage.gd`:
   `scripts/stage_hazard_runtime.gd`, `scripts/stage_pickup_runtime.gd`,
   `scripts/stage_projectile_runtime.gd`, `scripts/rim_obstacle_manager.gd`,
-  `scripts/enemy_skill_runtime.gd`.
+  `scripts/enemy_skill_runtime.gd`, `scripts/stage_flow_runtime.gd` (the last
+  owns run/stage state flags and timers; the start/advance/continue/game-over
+  transition orchestration that reads and writes them still lives in
+  `storm_stage.gd`, since it also needs the audio/HUD/runner/player nodes).
 - `scripts/stage_rules.gd` centralizes shared tunable constants (time
   bonus, gate lanes, anchor decay). `scripts/stage_hud.gd` owns all
   overlay/UI states (start, pause, game over, stage clear, complete).

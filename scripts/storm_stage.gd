@@ -36,18 +36,11 @@ var _hazards: StageHazardRuntime
 var _pickups: StagePickupRuntime
 var _projectiles: StageProjectileRuntime
 var _enemy_skills: EnemySkillRuntime
+var _flow: StageFlowRuntime
 var _active_markers: Dictionary = {}
 var _pickup_markers: Dictionary = {}
 var _score: int = 0
-var _stage: int = 1
-var _game_over: bool = false
-var _game_complete: bool = false
 var _damage_invulnerability_timer: float = 0.0
-var _stage_elapsed_time: float = 0.0
-var _stage_transition_timer: float = 0.0
-var _pending_stage: int = 0
-var _last_stage_time_bonus: int = 0
-var _run_active: bool = false
 
 func _ready() -> void:
 	_storm = get_node(storm_path) as StormTube
@@ -62,6 +55,7 @@ func _ready() -> void:
 	_setup_projectiles()
 	_setup_enemy_skills()
 	_setup_rim_obstacles()
+	_flow = StageFlowRuntime.new()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
 	_player.set_fire_enabled(false)
@@ -71,11 +65,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _audio:
 		_audio.stop_all()
-	_clear_markers()
-	_clear_pickup_markers()
-	_clear_bullets()
-	_clear_enemy_bolts()
-	_clear_rim_obstacles()
+	_clear_active_state()
 	if _hud:
 		_hud.queue_free()
 
@@ -85,9 +75,8 @@ func _process(delta: float) -> void:
 	_hud.tick_notice(delta)
 	_hud.tick_pickup_banner(delta)
 
-	if _stage_transition_timer > 0.0:
-		_stage_transition_timer = maxf(_stage_transition_timer - delta, 0.0)
-		if _stage_transition_timer <= 0.0:
+	if _flow.stage_transition_timer > 0.0:
+		if _flow.tick_transition(delta):
 			_continue_to_pending_stage()
 		_update_hud()
 		return
@@ -96,12 +85,12 @@ func _process(delta: float) -> void:
 		restart_stage()
 		return
 
-	if not _run_active or _game_over:
+	if _flow.is_run_blocked():
 		if Input.is_action_just_pressed("ui_accept") and _hud.should_accept_shortcut_start():
 			_start_game()
 		return
 
-	_stage_elapsed_time += delta
+	_flow.tick(delta)
 
 	var player_distance: float = _runner.distance()
 	var player_lane: int = _runner.lane_index()
@@ -152,30 +141,19 @@ func is_menu_screen_active() -> bool:
 func _start_stage(stage: int) -> void:
 	lives = 3
 	_score = 0
-	_stage = clampi(stage, 1, 2)
-	_hud.selected_start_stage = _stage
-	_game_over = false
-	_game_complete = false
-	_run_active = true
 	_damage_invulnerability_timer = 0.0
+	_flow.start_stage(stage)
+	_hud.selected_start_stage = _flow.stage
 	_hud.clear_notice()
 	_hud.clear_pickup_banner()
-	_stage_elapsed_time = 0.0
-	_stage_transition_timer = 0.0
-	_pending_stage = 0
-	_last_stage_time_bonus = 0
 	_runner.set_input_enabled(true)
 	_player.set_fire_enabled(true)
 	_player.reset_fire_cooldown()
 	_runner.restart_run()
-	_clear_markers()
-	_clear_pickup_markers()
-	_clear_bullets()
-	_clear_enemy_bolts()
-	_clear_rim_obstacles()
-	_build_stage_for(_stage)
-	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
-	_audio.load_music_stage(_stage)
+	_clear_active_state()
+	_build_stage_for(_flow.stage)
+	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_flow.stage))
+	_audio.load_music_stage(_flow.stage)
 	_hud.hide_state_overlay()
 	_update_hud()
 
@@ -183,7 +161,7 @@ func _start_game() -> void:
 	_start_stage(_hud.selected_start_stage)
 
 func _on_player_fire_requested() -> void:
-	if not _run_active or _game_over:
+	if _flow.is_run_blocked():
 		return
 	_fire()
 
@@ -335,20 +313,19 @@ func _on_hud_exit_pressed() -> void:
 	get_tree().quit()
 
 func _on_hud_stage_selected(stage: int) -> void:
-	if not _run_active:
-		_stage = stage
-		_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
-		_audio.load_music_stage(_stage)
-		_build_stage_for(_stage)
-		_update_hud()
+	if _flow.run_active:
+		return
+	_flow.stage = stage
+	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_flow.stage))
+	_audio.load_music_stage(_flow.stage)
+	_build_stage_for(_flow.stage)
+	_update_hud()
 
 func _advance_stage() -> void:
 	_play_sfx(StageAudio.CLEAR_SOUND)
 	_damage_invulnerability_timer = 0.0
-	var completed_stage: int = _stage
-	var next_stage: int = _stage + 1
-	_last_stage_time_bonus = _stage_clear_time_bonus(_stage_elapsed_time)
-	_score += _last_stage_time_bonus
+	var completed_stage: int = _flow.stage
+	var next_stage: int = completed_stage + 1
 	_clear_markers()
 	_clear_pickup_markers()
 	_clear_bullets()
@@ -358,34 +335,29 @@ func _advance_stage() -> void:
 	for hazard in _hazards.all():
 		hazard.cleared = true
 	if next_stage == 2:
-		_pending_stage = next_stage
-		_stage_transition_timer = STAGE_TRANSITION_TIME
-		_run_active = false
+		_flow.begin_stage_clear_transition(next_stage, STAGE_TRANSITION_TIME)
+		_score += _flow.last_stage_time_bonus
 		_runner.set_input_enabled(false)
 		_player.set_fire_enabled(false)
 		_hud.show_stage_clear_screen(
 			completed_stage,
 			_score,
-			_format_stage_time(_stage_elapsed_time),
-			_last_stage_time_bonus,
+			_format_stage_time(_flow.stage_elapsed_time),
+			_flow.last_stage_time_bonus,
 			next_stage
 		)
 		_update_hud()
 		return
+	_flow.complete_run()
+	_score += _flow.last_stage_time_bonus
 	_runner.set_input_enabled(false)
 	_player.set_fire_enabled(false)
-	_game_over = true
-	_game_complete = true
-	_run_active = false
 	_hud.show_complete_screen(_score)
 	_update_hud()
 
 func _continue_to_pending_stage() -> void:
-	if _pending_stage <= 0:
+	if not _flow.continue_to_pending():
 		return
-	_stage = _pending_stage
-	_pending_stage = 0
-	_stage_elapsed_time = 0.0
 	_damage_invulnerability_timer = 0.0
 	_hud.clear_notice()
 	_hud.clear_pickup_banner()
@@ -393,17 +365,20 @@ func _continue_to_pending_stage() -> void:
 	_runner.set_input_enabled(true)
 	_player.set_fire_enabled(true)
 	_player.reset_fire_cooldown()
-	_run_active = true
-	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_stage))
-	_audio.load_music_stage(_stage)
-	_build_stage_for(_stage)
+	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_flow.stage))
+	_audio.load_music_stage(_flow.stage)
+	_build_stage_for(_flow.stage)
 	_hud.hide_state_overlay()
+
+func _clear_active_state() -> void:
+	_clear_markers()
+	_clear_pickup_markers()
+	_clear_bullets()
+	_clear_enemy_bolts()
+	_clear_rim_obstacles()
 
 func _format_stage_time(seconds: float) -> String:
 	return StageRules.format_stage_time(seconds)
-
-func _stage_clear_time_bonus(seconds: float) -> int:
-	return StageRules.stage_clear_time_bonus(seconds)
 
 func _ensure_marker(hazard: StageHazardRuntime.Hazard) -> void:
 	if _active_markers.has(hazard):
@@ -643,7 +618,7 @@ func _update_enemy_bolts(delta: float, player_distance: float, player_lane: int)
 		if _projectiles.enemy_bolt_reached_player(bolt, player_distance):
 			if bolt.lane == player_lane:
 				_damage_player(StageAudio.HIT_SOUND)
-				if _game_over:
+				if _flow.game_over:
 					return
 			bolt.marker.queue_free()
 			_projectiles.remove_enemy_bolt(bolt)
@@ -682,7 +657,7 @@ func _update_rim_obstacles(delta: float, player_lane: int) -> void:
 			_play_sfx(StageAudio.KILL_SOUND, -8.0)
 		elif event["type"] == "exploded":
 			_damage_player(StageAudio.EXPLODER_SOUND)
-			if _game_over:
+			if _flow.game_over:
 				return
 
 func _check_rim_obstacle_collision(player_lane: int) -> void:
@@ -707,23 +682,16 @@ func _damage_player(sound: AudioStream) -> void:
 		_trigger_game_over()
 
 func _can_damage_player() -> bool:
-	return not _game_over and _damage_invulnerability_timer <= 0.0
+	return not _flow.game_over and _damage_invulnerability_timer <= 0.0
 
 func _trigger_game_over() -> void:
-	if _game_over:
+	if not _flow.trigger_game_over():
 		return
-	_game_over = true
-	_game_complete = false
-	_run_active = false
 	_runner.set_input_enabled(false)
 	_player.set_fire_enabled(false)
-	_clear_markers()
-	_clear_pickup_markers()
-	_clear_bullets()
-	_clear_enemy_bolts()
-	_clear_rim_obstacles()
+	_clear_active_state()
 	_play_sfx(StageAudio.GAME_OVER_SOUND, -2.0)
-	_hud.show_game_over_screen(_score, _stage)
+	_hud.show_game_over_screen(_score, _flow.stage)
 
 func _burst_rim_obstacles() -> void:
 	for position in _rim_obstacles.positions():
@@ -769,15 +737,8 @@ func _update_hud() -> void:
 	for hazard in _hazards.all():
 		if hazard.spawned and not hazard.cleared:
 			active_hazards += 1
-	var status: String = ""
-	if not _run_active and not _game_over:
-		status = "READY"
-	if _stage_transition_timer > 0.0:
-		status = "STAGE CLEAR"
-	if _game_over:
-		status = "CLEAR" if _game_complete else "GAME OVER"
 	_hud.update_status(
-		_stage,
+		_flow.stage,
 		distance,
 		speed,
 		_score,
@@ -785,5 +746,5 @@ func _update_hud() -> void:
 		_rim_obstacles.count(),
 		active_hazards,
 		progress,
-		status
+		_flow.status_label()
 	)
