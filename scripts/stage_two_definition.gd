@@ -57,18 +57,20 @@ static func _helix_bend_points(start: Vector3) -> PackedVector3Array:
 	# One continuous, monotonic bend to the right (x keeps increasing) and
 	# down (y keeps decreasing) as the route advances (z keeps decreasing) -
 	# no reversal, no wrapping around past a quarter turn's worth of visual
-	# banking. Point spacing matches the gentle slope and switchback (~150-
-	# 180 z-units apart before _subdivide runs).
+	# banking. Lateral offset grows much faster than forward depth here
+	# (finishes at roughly 1000 units of sideways+down travel over only 670
+	# forward) for a total direction change of about 56 degrees end to end -
+	# a pronounced, unmistakable bend, still nowhere near a quarter turn.
 	return PackedVector3Array(
 		[
-			start + Vector3(20.0, -8.0, -150.0),
-			start + Vector3(55.0, -20.0, -320.0),
-			start + Vector3(100.0, -38.0, -500.0),
-			start + Vector3(150.0, -60.0, -680.0),
-			start + Vector3(205.0, -86.0, -850.0),
-			start + Vector3(260.0, -115.0, -1010.0),
-			start + Vector3(315.0, -148.0, -1160.0),
-			start + Vector3(365.0, -184.0, -1300.0),
+			start + Vector3(60.0, -25.0, -60.0),
+			start + Vector3(150.0, -65.0, -140.0),
+			start + Vector3(270.0, -120.0, -230.0),
+			start + Vector3(410.0, -190.0, -330.0),
+			start + Vector3(560.0, -270.0, -430.0),
+			start + Vector3(710.0, -350.0, -530.0),
+			start + Vector3(830.0, -410.0, -610.0),
+			start + Vector3(900.0, -450.0, -670.0),
 		]
 	)
 
