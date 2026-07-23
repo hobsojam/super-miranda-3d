@@ -24,8 +24,12 @@ class RouteSample:
 	var right: Vector3
 	var up: Vector3
 
-func _ready() -> void:
-	_build_route()
+func rebuild_route(control_points: PackedVector3Array) -> void:
+	_build_route(control_points)
+	if _wall:
+		_wall.queue_free()
+	if _guides:
+		_guides.queue_free()
 	_build_meshes()
 
 func sample_at_distance(distance: float) -> RouteSample:
@@ -52,42 +56,9 @@ func set_guide_overdraw_enabled(enabled: bool) -> void:
 	_guides.material_override = _guide_material()
 	add_child(_guides)
 
-func _build_route() -> void:
+func _build_route(control_points: PackedVector3Array) -> void:
 	_samples.clear()
-	# Each point is deliberately modest in lateral displacement: the player
-	# should feel a succession of readable corners, not lose the route behind
-	# an opaque wall. It is a finite first-stage route; R restarts the preview.
-	var control_points := PackedVector3Array(
-		[
-			Vector3(0, 0, 0),
-			Vector3(0, 0, -70),
-			Vector3(30, 12, -145),
-			Vector3(78, -8, -220),
-			Vector3(48, -40, -305),
-			Vector3(-20, -28, -390),
-			Vector3(-62, 16, -480),
-			Vector3(-24, 48, -575),
-			Vector3(44, 22, -665),
-			Vector3(66, -24, -755),
-			Vector3(18, -48, -850),
-			Vector3(-35, -10, -940),
-			Vector3(-72, 28, -1040),
-			Vector3(-18, 58, -1155),
-			Vector3(58, 34, -1275),
-			Vector3(86, -20, -1405),
-			Vector3(22, -60, -1540),
-			Vector3(-54, -34, -1680),
-			Vector3(-88, 22, -1835),
-			Vector3(-28, 66, -1990),
-			Vector3(54, 46, -2155),
-			Vector3(92, -18, -2325),
-			Vector3(30, -66, -2505),
-			Vector3(-62, -38, -2685),
-			Vector3(-96, 30, -2870),
-			Vector3(-18, 72, -3060),
-			Vector3(68, 38, -3250),
-		]
-	)
+	route_length = 0.0
 	var previous_right: Vector3 = Vector3.RIGHT
 	var previous_position: Vector3 = Vector3.ZERO
 	for i in ring_samples:
