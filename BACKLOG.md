@@ -2,17 +2,16 @@
 
 ## Windows Build Automation
 
-`export_presets.cfg` now has a local "Windows Desktop" preset (see
-`AGENTS.md` for how to run it) so a real `.exe` can be built and playtested
-by hand. Not done yet:
+`export_presets.cfg` has a local "Windows Desktop" preset (see `AGENTS.md`
+for how to run it), and CI now builds it on every push/PR and uploads the
+`.exe` as a workflow artifact (`windows-build` job in
+`.github/workflows/ci.yml`). Not done yet:
 
-- A CI job that runs the export on push/PR and uploads the `.exe` as a
-  workflow artifact, so builds don't depend on anyone's local export
-  templates. Needs the matching Godot export templates cached/installed on
-  the CI runner (`.tpz` package matching `GODOT_VERSION`/`GODOT_RELEASE` in
-  `.github/workflows/ci.yml`).
-- Automated GitHub Releases publishing the `.exe` (e.g. on version tags),
-  once there's an actual versioning scheme for the project.
+- Automated GitHub Releases publishing the `.exe` on version tags
+  (`vMAJOR.MINOR.PATCH` — see `AGENTS.md`'s Versioning section). Needs a
+  release workflow triggered on `push: tags: ['v*']` that reuses the
+  `windows-build` job's export steps, zips the result, and publishes it
+  with `gh release create`.
 
 ## Environmental Hazards
 
