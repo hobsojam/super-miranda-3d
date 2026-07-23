@@ -10,6 +10,7 @@ const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd
 const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd")
 const StagePickupRuntimeScript := preload("res://scripts/stage_pickup_runtime.gd")
 const StageProjectileRuntimeScript := preload("res://scripts/stage_projectile_runtime.gd")
+const EnemySkillRuntimeScript := preload("res://scripts/enemy_skill_runtime.gd")
 const StormPlayerScript := preload("res://scripts/storm_player.gd")
 
 var _failures: int = 0
@@ -27,6 +28,7 @@ func _initialize() -> void:
 	_test_hazard_runtime()
 	_test_pickup_runtime()
 	_test_projectile_runtime()
+	_test_enemy_skill_runtime()
 	_test_player_fire_intent()
 
 	if _failures == 0:
@@ -364,6 +366,55 @@ func _test_projectile_runtime() -> void:
 	runtime.remove_enemy_bolt(bolt)
 	_assert_eq(runtime.bullet_count(), 0, "removes player bullet")
 	_assert_eq(runtime.enemy_bolt_count(), 0, "removes enemy bolt")
+
+func _test_enemy_skill_runtime() -> void:
+	var hazards: StageHazardRuntime = StageHazardRuntimeScript.new()
+	hazards.setup(16, 1000.0, 4.2, 520.0, 2.0, 1.35)
+	var skills: EnemySkillRuntime = EnemySkillRuntimeScript.new()
+	skills.setup(16, 4.2, 7.0, 70.0, 1.35, 2.0)
+
+	var spiker: StageHazardRuntime.Hazard = hazards.add_hazard(500.0, 5, "spiker")
+	spiker.spawned = true
+	_assert_eq(spiker.spiker_lane_direction, -1, "odd lane starts stepping backward")
+
+	var event: Dictionary = skills.update(spiker, 0.5, 100.0, 1000.0)
+	_assert_true(event.is_empty(), "no event on partial spiker tick")
+	_assert_float_eq(spiker.distance, 503.5, "spiker retreats toward player")
+	_assert_float_eq(spiker.spiker_lane_timer, 0.85, "spiker lane timer counts down")
+	_assert_eq(spiker.lane, 5, "spiker lane unchanged before step interval")
+
+	event = skills.update(spiker, 0.9, 100.0, 1000.0)
+	_assert_true(event.is_empty(), "no event on lane step tick")
+	_assert_eq(spiker.lane, 4, "spiker steps lane after interval")
+	_assert_eq(spiker.spiker_lane_direction, 1, "spiker alternates lane direction")
+
+	spiker.spike_drop_meter = 65.0
+	event = skills.update(spiker, 1.0, 100.0, 1000.0)
+	_assert_eq(event["type"], "spike_drop", "drops a spike after crossing spacing threshold")
+	_assert_eq(event["lane"], 4, "spike drop uses the spiker's current lane")
+	_assert_float_eq(event["distance"], 446.8, "spike drop lands behind the spiker")
+	_assert_float_eq(spiker.spike_drop_meter, 2.0, "spike drop meter resets after threshold")
+
+	spiker.distance = 995.0
+	event = skills.update(spiker, 1.0, 100.0, 1000.0)
+	_assert_eq(event, {"type": "cleared"}, "spiker clears at stage end")
+	_assert_true(spiker.cleared, "marks hazard cleared")
+
+	var pulsar: StageHazardRuntime.Hazard = hazards.add_hazard(300.0, 2, "pulsar")
+	pulsar.spawned = true
+	event = skills.update(pulsar, 1.0, 100.0, 1000.0)
+	_assert_true(event.is_empty(), "no bolt before pulsar interval elapses")
+	event = skills.update(pulsar, 1.0, 100.0, 1000.0)
+	_assert_eq(
+		event, {"type": "fire_bolt", "lane": 2, "distance": 300.0}, "fires bolt at pulsar interval"
+	)
+	_assert_float_eq(pulsar.pulse_timer, 2.0, "pulsar timer resets after firing")
+
+	var flipper: StageHazardRuntime.Hazard = hazards.add_hazard(50.0, 5, "flipper")
+	_assert_true(
+		skills.update(flipper, 1.0, 0.0, 1000.0).is_empty(),
+		"non-skill hazards produce no event"
+	)
 
 func _test_player_fire_intent() -> void:
 	var player: StormPlayer = StormPlayerScript.new()

@@ -35,6 +35,7 @@ var _rim_obstacles: RimObstacleManager
 var _hazards: StageHazardRuntime
 var _pickups: StagePickupRuntime
 var _projectiles: StageProjectileRuntime
+var _enemy_skills: EnemySkillRuntime
 var _active_markers: Dictionary = {}
 var _pickup_markers: Dictionary = {}
 var _score: int = 0
@@ -59,6 +60,7 @@ func _ready() -> void:
 	_setup_hazards()
 	_setup_pickups()
 	_setup_projectiles()
+	_setup_enemy_skills()
 	_setup_rim_obstacles()
 	_build_stage_for(1)
 	_runner.set_input_enabled(false)
@@ -270,41 +272,16 @@ func _update_hazard_skill(
 	delta: float,
 	player_distance: float
 ) -> void:
-	match hazard.kind:
-		"spiker":
-			_update_spiker(hazard, delta, player_distance)
-		"pulsar":
-			_update_pulsar(hazard, delta)
-
-func _update_spiker(
-	hazard: StageHazardRuntime.Hazard,
-	delta: float,
-	player_distance: float
-) -> void:
-	var travel: float = spiker_retreat_speed * delta
-	hazard.distance += travel
-	if hazard.distance >= _stage_end_distance() - hit_window:
-		hazard.cleared = true
-		_remove_marker(hazard)
+	var event: Dictionary = _enemy_skills.update(hazard, delta, player_distance, _stage_end_distance())
+	if event.is_empty():
 		return
-	hazard.spike_drop_meter += travel
-	hazard.spiker_lane_timer -= delta
-	if hazard.spiker_lane_timer <= 0.0:
-		hazard.spiker_lane_timer = spiker_lane_step_interval
-		hazard.lane = wrapi(hazard.lane + hazard.spiker_lane_direction, 0, _storm.lane_count)
-		hazard.spiker_lane_direction *= -1
-	if hazard.spike_drop_meter >= spiker_drop_spacing:
-		hazard.spike_drop_meter -= spiker_drop_spacing
-		var drop_distance: float = hazard.distance - spiker_drop_spacing
-		if drop_distance > player_distance + hit_window:
-			_spawn_hazard(drop_distance, hazard.lane, "spike")
-
-func _update_pulsar(hazard: StageHazardRuntime.Hazard, delta: float) -> void:
-	hazard.pulse_timer -= delta
-	if hazard.pulse_timer > 0.0:
-		return
-	hazard.pulse_timer = pulsar_fire_interval
-	_fire_enemy_bolt(hazard.lane, hazard.distance)
+	match event["type"]:
+		"cleared":
+			_remove_marker(hazard)
+		"spike_drop":
+			_spawn_hazard(event["distance"], event["lane"], "spike")
+		"fire_bolt":
+			_fire_enemy_bolt(event["lane"], event["distance"])
 
 func _spawn_hazard(distance: float, lane: int, kind: String) -> StageHazardRuntime.Hazard:
 	return _hazards.spawn_hazard(distance, lane, kind)
@@ -338,6 +315,17 @@ func _setup_pickups() -> void:
 func _setup_projectiles() -> void:
 	_projectiles = StageProjectileRuntime.new()
 	_projectiles.setup(bullet_speed, bullet_range, pulsar_bolt_speed, hit_window)
+
+func _setup_enemy_skills() -> void:
+	_enemy_skills = EnemySkillRuntime.new()
+	_enemy_skills.setup(
+		_storm.lane_count,
+		hit_window,
+		spiker_retreat_speed,
+		spiker_drop_spacing,
+		spiker_lane_step_interval,
+		pulsar_fire_interval
+	)
 
 func _setup_rim_obstacles() -> void:
 	_rim_obstacles = RimObstacleManager.new()
