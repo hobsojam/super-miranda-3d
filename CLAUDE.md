@@ -39,8 +39,8 @@ touching anything under `scripts/`.
 `export_presets.cfg` has a "Windows Desktop" preset. Install matching
 export templates first, create the output directory (Godot won't), then:
 `godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe`.
-See `AGENTS.md` for the full setup steps (export templates, `rcedit` for
-icon embedding). `build/` is gitignored. CI stops at
+See `AGENTS.md` for the full setup steps (export templates). `build/` is
+gitignored. CI stops at
 import/lint/test/smoke-load (`.github/workflows/ci.yml`) — building this
 preset in CI and publishing releases is on `BACKLOG.md`, not done yet.
 

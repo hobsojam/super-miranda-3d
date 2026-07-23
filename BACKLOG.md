@@ -36,17 +36,6 @@ This should cover:
 Avoid doing this before enemy skill extraction, because stage flow still touches
 almost every system.
 
-## Fullscreen Mode
-
-F11/Alt+Enter shortcut and a pause-menu checkbox are done. Confirmed
-working, HUD sizing included, in a real standalone Windows build (Godot's
-embedded editor preview can't test fullscreen at all).
-
-Still open:
-
-- Persisting the choice across sessions if project settings support it
-  cleanly.
-
 ## Windows Build Automation
 
 `export_presets.cfg` now has a local "Windows Desktop" preset (see
@@ -58,9 +47,6 @@ by hand. Not done yet:
   templates. Needs the matching Godot export templates cached/installed on
   the CI runner (`.tpz` package matching `GODOT_VERSION`/`GODOT_RELEASE` in
   `.github/workflows/ci.yml`).
-- Deciding whether `rcedit` (needed to embed the icon/version info into the
-  `.exe`) is worth installing in CI, or whether CI builds ship with a
-  generic Explorer icon.
 - Automated GitHub Releases publishing the `.exe` (e.g. on version tags),
   once there's an actual versioning scheme for the project.
 

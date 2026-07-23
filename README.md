@@ -71,9 +71,9 @@ A "Windows Desktop" export preset is already configured in
    godot --headless --path . --export-release "Windows Desktop" build/windows/super-miranda-3d.exe
    ```
 
-Embedding a custom icon and version info into the `.exe` needs `rcedit`
-configured in Editor Settings > Export > Windows; without it the export
-still succeeds, just with a generic file icon. `build/` is gitignored.
+Godot 4.7's Windows exporter embeds the custom icon and version info into
+the `.exe` natively, no external `rcedit` tool needed. `build/` is
+gitignored.
 
 ## Project Layout
 
