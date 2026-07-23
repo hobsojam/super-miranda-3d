@@ -1,7 +1,7 @@
 class_name StageTwoDefinition
 extends RefCounted
 
-const CORKSCREW_REVOLUTIONS := 25.0
+const CORKSCREW_REVOLUTIONS := 17.0
 const CORKSCREW_RADIUS := 20.0
 const CORKSCREW_LENGTH := 1220.0
 const ROUTE_RING_SAMPLES := 640
