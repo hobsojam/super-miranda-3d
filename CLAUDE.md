@@ -69,7 +69,8 @@ tool over anything tied to one contributor's environment.
 - Per-run state is split into extracted runtime classes, each following the
   same extraction pattern out of `storm_stage.gd`:
   `scripts/stage_hazard_runtime.gd`, `scripts/stage_pickup_runtime.gd`,
-  `scripts/stage_projectile_runtime.gd`, `scripts/rim_obstacle_manager.gd`.
+  `scripts/stage_projectile_runtime.gd`, `scripts/rim_obstacle_manager.gd`,
+  `scripts/enemy_skill_runtime.gd`.
 - `scripts/stage_rules.gd` centralizes shared tunable constants (time
   bonus, gate lanes, anchor decay). `scripts/stage_hud.gd` owns all
   overlay/UI states (start, pause, game over, stage clear, complete).
