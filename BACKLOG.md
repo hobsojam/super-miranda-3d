@@ -1,14 +1,5 @@
 # Backlog
 
-## Pickup Feedback
-
-- Life and purge pickups work mechanically.
-- Collection should read more clearly during play. Add a stronger pickup effect,
-  HUD notice, or sound mix touch so the player immediately understands that the
-  item was collected.
-- Purge is an instant clearance pulse. It clears anchored obstacles when
-  collected; it is not a shield and does not prevent future damage.
-
 ## Refactor Enemy Skills
 
 Move enemy skill behavior out of `StormStage` now that hazards, pickups, rim

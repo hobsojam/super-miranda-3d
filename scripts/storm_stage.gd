@@ -475,13 +475,13 @@ func _collect_pickup(pickup: StagePickupRuntime.Pickup) -> void:
 			_score += 500
 			_hud.show_notice("EXTRA LIFE")
 			_hud.flash_pickup("EXTRA LIFE", Color(0.45, 1.0, 0.55))
-			_play_sfx(StageAudio.CLEAR_SOUND, -8.0)
+			_play_sfx(StageAudio.LIFE_PICKUP_SOUND, -4.0)
 		"purge":
 			_score += 750
 			_purge_rim_obstacles()
 			_hud.show_notice("CLEARANCE PULSE")
 			_hud.flash_pickup("CLEARANCE PULSE", Color(0.3, 1.0, 1.0))
-			_play_sfx(StageAudio.EXPLODER_SOUND, -8.0)
+			_play_sfx(StageAudio.PURGE_PICKUP_SOUND, -4.0)
 
 func _destroy_pickup(pickup: StagePickupRuntime.Pickup) -> void:
 	_pickups.clear_pickup(pickup)

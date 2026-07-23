@@ -73,6 +73,16 @@ func _test_stage_audio() -> void:
 		-7.0,
 		"regular damage is quieter"
 	)
+	_assert_true(StageAudioScript.LIFE_PICKUP_SOUND != null, "life pickup sound is loaded")
+	_assert_true(StageAudioScript.PURGE_PICKUP_SOUND != null, "purge pickup sound is loaded")
+	_assert_true(
+		StageAudioScript.LIFE_PICKUP_SOUND != StageAudioScript.CLEAR_SOUND,
+		"life pickup has a distinct sound"
+	)
+	_assert_true(
+		StageAudioScript.PURGE_PICKUP_SOUND != StageAudioScript.EXPLODER_SOUND,
+		"purge pickup has a distinct sound"
+	)
 
 func _test_gate_lanes() -> void:
 	var straight: Array[Dictionary] = StageRulesScript.gate_lanes(0, 4, 16)
