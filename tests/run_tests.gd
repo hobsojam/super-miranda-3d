@@ -227,13 +227,13 @@ func _test_stage_definitions() -> void:
 	var stage_two_hazards: Array[Dictionary] = StageTwoDefinitionScript.hazards()
 	var stage_two_pickups: Array[Dictionary] = StageTwoDefinitionScript.pickups()
 	var stage_two_gates: Array[Dictionary] = StageTwoDefinitionScript.gate_pairs()
-	_assert_eq(stage_two_hazards.size(), 14, "stage 2 hazard count is preserved")
-	_assert_eq(stage_two_hazards[0], _hazard(650.0, 1, "flipper"), "stage 2 first hazard")
-	_assert_eq(stage_two_gates[0], _gate_pair(3260.0, 0, 4, 1), "stage 2 first gate")
-	_assert_eq(stage_two_gates[-1], _gate_pair(3620.0, 5, 10, 5), "stage 2 final gate")
+	_assert_eq(stage_two_hazards.size(), 17, "stage 2 hazard count is preserved")
+	_assert_eq(stage_two_hazards[0], _hazard(640.0, 1, "flipper"), "stage 2 first hazard")
+	_assert_eq(stage_two_gates[0], _gate_pair(4400.0, 0, 4, 1), "stage 2 first gate")
+	_assert_eq(stage_two_gates[-1], _gate_pair(4750.0, 5, 10, 5), "stage 2 final gate")
 	_assert_eq(
 		stage_two_pickups,
-		[_pickup(1340.0, 4, "purge"), _pickup(2350.0, 4, "life")],
+		[_pickup(1150.0, 4, "purge"), _pickup(1900.0, 4, "life")],
 		"stage 2 pickups"
 	)
 	_assert_true(

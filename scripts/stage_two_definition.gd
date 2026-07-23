@@ -12,7 +12,21 @@ extends RefCounted
 # route parametrizes evenly.
 const ROUTE_STEP := 12.0
 
-const CORKSCREW_REVOLUTIONS := 8.0
+# Revolutions and arc length are scaled down together by the same ~25%
+# factor from the original (8.0 revolutions, 3854 arc length) so trimming
+# the corkscrew's overall travel doesn't also change its tightness: for a
+# fixed radius, scaling both by the same factor k scales descent_length by
+# k too (see _corkscrew_points), so descent-per-loop - and the coil's
+# proportions generally - come out the same, just with fewer loops.
+# Kept a whole number deliberately: the entrance's angle is phase-shifted by
+# PI so its initial direction continues the incoming -Z travel direction
+# (see _corkscrew_points), and a whole revolution count lands the EXIT at
+# that same phase, so it keeps heading forward too. A non-integer count
+# (tried 5.6 first) stops the coil mid-swing-back, which produced a fresh
+# ~108 degree reversal at the corkscrew/switchback seam - the same bug
+# class as the entrance one, just discovered at the other end once the
+# trim changed which phase the coil happened to stop at.
+const CORKSCREW_REVOLUTIONS := 6.0
 # Radius 75 (diameter 150) with this arc length gives ~100 units of descent
 # per loop - a middle ground between the original tight-drill proportions
 # (diameter 40, ~280/loop) and a flat, snake-like coil (diameter 280,
@@ -25,7 +39,7 @@ const CORKSCREW_RADIUS := 75.0
 # the same wire length just spans more downward space. The descent depth
 # is derived from this and the current revolutions/radius, not the other
 # way around (see _corkscrew_points).
-const CORKSCREW_ARC_LENGTH := 3854.0
+const CORKSCREW_ARC_LENGTH := 2890.0
 # How many of the leading revolutions ease the radius AND descent rate in
 # from 0 to full, smoothstep-eased, instead of snapping straight to full
 # amplitude/speed - avoids a sudden, large tangent swing right at the
@@ -167,14 +181,19 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 	return points
 
 static func _climbing_switchback_points(start: Vector3) -> PackedVector3Array:
+	# Scaled down ~16% from the previous shape (uniformly across x/y/z, so
+	# the switchback keeps the same proportions/character) so the route's
+	# total length lands around 5000 instead of drifting past 6000 once the
+	# corkscrew above was also trimmed - there was no authored content past
+	# the last gate at the old length, just empty travel.
 	return PackedVector3Array(
 		[
-			start + Vector3(48.0, 35.2, -256.0),
-			start + Vector3(-54.4, 83.2, -544.0),
-			start + Vector3(60.8, 139.2, -864.0),
-			start + Vector3(-48.0, 203.2, -1216.0),
-			start + Vector3(38.4, 283.2, -1584.0),
-			start + Vector3(0.0, 371.2, -2016.0),
+			start + Vector3(35.9, 26.4, -191.7),
+			start + Vector3(-40.7, 62.3, -407.4),
+			start + Vector3(45.6, 104.2, -647.1),
+			start + Vector3(-35.9, 152.2, -910.9),
+			start + Vector3(28.8, 212.2, -1186.3),
+			start + Vector3(0.0, 278.0, -1509.7),
 		]
 	)
 
@@ -189,36 +208,52 @@ static func _subdivide(points: PackedVector3Array, step: float) -> PackedVector3
 	return result
 
 static func hazards() -> Array[Dictionary]:
+	# Distances through 2250 are the original corkscrew hazards, rescaled by
+	# the same ~0.74 ratio the corkscrew itself was trimmed by so each one
+	# keeps its position relative to the coil rather than landing somewhere
+	# the geometry no longer matches. The second one (was distance 780, lane
+	# 5) is moved to lane 13 - the opposite rail - because lane 5 sat on the
+	# blind/inner side of the bend there, impossible to see coming. The
+	# three from 3600 on are new: the switchback climb had zero hazards
+	# before, just empty travel, which was most of why the stage read as
+	# sparse.
 	return [
-		_hazard(650.0, 1, "flipper"),
-		_hazard(780.0, 5, "flipper"),
-		_hazard(910.0, 9, "flipper"),
-		_hazard(1040.0, 13, "flipper"),
-		_hazard(1240.0, 3, "splitter"),
-		_hazard(1240.0, 4, "splitter"),
-		_hazard(1440.0, 11, "spiker"),
-		_hazard(1660.0, 6, "pulsar"),
-		_hazard(1810.0, 7, "pulsar"),
-		_hazard(1960.0, 8, "pulsar"),
-		_hazard(2220.0, 2, "exploder"),
-		_hazard(2220.0, 10, "exploder"),
-		_hazard(2520.0, 15, "flipper"),
-		_hazard(2820.0, 0, "splitter"),
+		_hazard(640.0, 1, "flipper"),
+		_hazard(740.0, 13, "flipper"),
+		_hazard(830.0, 9, "flipper"),
+		_hazard(930.0, 13, "flipper"),
+		_hazard(1080.0, 3, "splitter"),
+		_hazard(1080.0, 4, "splitter"),
+		_hazard(1230.0, 11, "spiker"),
+		_hazard(1390.0, 6, "pulsar"),
+		_hazard(1500.0, 7, "pulsar"),
+		_hazard(1610.0, 8, "pulsar"),
+		_hazard(1810.0, 2, "exploder"),
+		_hazard(1810.0, 10, "exploder"),
+		_hazard(2030.0, 15, "flipper"),
+		_hazard(2250.0, 0, "splitter"),
+		_hazard(3600.0, 3, "flipper"),
+		_hazard(3850.0, 12, "spiker"),
+		_hazard(4100.0, 7, "flipper"),
 	]
 
 static func pickups() -> Array[Dictionary]:
 	return [
-		_pickup(1340.0, 4, "purge"),
-		_pickup(2350.0, 4, "life"),
+		_pickup(1150.0, 4, "purge"),
+		_pickup(1900.0, 4, "life"),
 	]
 
 static func gate_pairs() -> Array[Dictionary]:
+	# Repositioned from the old 3260-3620 range, which was inside the old
+	# (longer) corkscrew, to sit near the end of the shorter route instead -
+	# a closing gauntlet with a short run-out to the finish rather than
+	# ~1500 units of empty travel after the last gate.
 	return [
-		_gate_pair(3260.0, 0, 4, 1),
-		_gate_pair(3260.0, 8, 12, 2),
-		_gate_pair(3500.0, 2, 6, 3),
-		_gate_pair(3500.0, 10, 14, 4),
-		_gate_pair(3620.0, 5, 10, 5),
+		_gate_pair(4400.0, 0, 4, 1),
+		_gate_pair(4400.0, 8, 12, 2),
+		_gate_pair(4600.0, 2, 6, 3),
+		_gate_pair(4600.0, 10, 14, 4),
+		_gate_pair(4750.0, 5, 10, 5),
 	]
 
 static func guide_overdraw_enabled() -> bool:
