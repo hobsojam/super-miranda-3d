@@ -37,13 +37,13 @@ static func _gentle_slope_points() -> PackedVector3Array:
 	return PackedVector3Array(
 		[
 			Vector3(0.0, 0.0, 0.0),
-			Vector3(0.0, -4.0, -80.0),
-			Vector3(4.0, -12.0, -220.0),
-			Vector3(-3.0, -22.0, -380.0),
-			Vector3(6.0, -34.0, -560.0),
-			Vector3(-4.0, -48.0, -760.0),
-			Vector3(3.0, -64.0, -980.0),
-			Vector3(0.0, -82.0, -1220.0),
+			Vector3(0.0, -2.0, -40.0),
+			Vector3(4.0, -6.0, -110.0),
+			Vector3(-3.0, -11.0, -190.0),
+			Vector3(6.0, -17.0, -280.0),
+			Vector3(-4.0, -24.0, -380.0),
+			Vector3(3.0, -32.0, -490.0),
+			Vector3(0.0, -41.0, -610.0),
 		]
 	)
 
