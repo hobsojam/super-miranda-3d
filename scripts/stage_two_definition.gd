@@ -1,43 +1,43 @@
 class_name StageTwoDefinition
 extends RefCounted
 
-const CORKSCREW_REVOLUTIONS := 17.0
-const CORKSCREW_RADIUS := 20.0
-const CORKSCREW_LENGTH := 1220.0
-const ROUTE_RING_SAMPLES := 640
-
-# How many of the leading revolutions ease the radius in from 0 to full,
-# smoothstep-eased, instead of snapping straight to full amplitude. Without
-# this the entry from the gentle slope into the corkscrew is a sudden ~60
-# degree tangent swing in a single sample - felt like a wall, not a turn.
-const CORKSCREW_RAMP_REVOLUTIONS := 3.0
-
 # This engine's Catmull-Rom uses uniform, index-based parametrization (see
 # StormTube._catmull_rom): it assumes each control-point-to-control-point
-# step covers roughly equal distance. The corkscrew needs far denser points
-# than a gentle slope or switchback ever would; feeding those straight into
-# one spline without equalizing density causes a severe overshoot right at
-# the segment boundary (measured: 100+ degrees of tangent swing in a single
-# sample). ROUTE_STEP re-subdivides every segment to roughly the same
-# spacing so the whole route parametrizes evenly.
+# step covers roughly equal distance. Feeding it hand-placed segments with
+# very different point spacing without equalizing density first can cause
+# real overshoot right at the segment boundary (this route used to have a
+# tightly-wound corkscrew section that measured 100+ degrees of tangent
+# swing in a single sample from exactly that mismatch). ROUTE_STEP
+# re-subdivides every segment to roughly the same spacing so the whole
+# route parametrizes evenly, even though the current shape is gentle enough
+# that it isn't strictly load-bearing anymore - cheap insurance to keep.
 const ROUTE_STEP := 12.0
 
 static func route() -> PackedVector3Array:
 	# A distinct shape from Stage 1's route so the two stages don't feel like
 	# the same tunnel with a different enemy list: a gentle, mostly-straight
-	# slope for the first third, a tight corkscrew for the middle third, and
-	# an ascending switchback climb for the last third.
+	# slope for the first third, a single continuous helical bend to the
+	# right and down for the middle third, and an ascending switchback climb
+	# for the last third. The middle bend deliberately never completes a
+	# full revolution - earlier corkscrew attempts (multiple full turns)
+	# made the whole tube roll around the travel axis, which made hazards
+	# almost impossible to track against a constantly-rotating reference
+	# frame. This is meant to read as one sustained banking turn, not a
+	# spiral you rotate through.
 	var points: PackedVector3Array = _subdivide(_gentle_slope_points(), ROUTE_STEP)
-	points.append_array(_corkscrew_points(points[points.size() - 1]))
-	var corkscrew_end: Vector3 = points[points.size() - 1]
-	var switchback: PackedVector3Array = PackedVector3Array([corkscrew_end])
-	switchback.append_array(_climbing_switchback_points(corkscrew_end))
-	# Slice off the leading point: it's corkscrew_end again, already the last
-	# entry in `points`, included here only so _subdivide can smooth this
-	# specific seam too (see the ROUTE_STEP comment above for why unequal
-	# density between segments matters, not just within them).
-	points.append_array(_subdivide(switchback, ROUTE_STEP).slice(1))
+	points.append_array(_joined_subdivision(points[points.size() - 1], _helix_bend_points))
+	points.append_array(_joined_subdivision(points[points.size() - 1], _climbing_switchback_points))
 	return points
+
+# Subdivides `segment_points(start)` at ROUTE_STEP, including the seam
+# between `start` and the segment's own first point - not just the gaps
+# within the segment. Missing that seam specifically (not just under-
+# sampling within a segment) has caused two real, measured bugs already:
+# a ~92-unit unsubdivided gap and, separately, a ~135-unit one.
+static func _joined_subdivision(start: Vector3, segment_points: Callable) -> PackedVector3Array:
+	var joined: PackedVector3Array = PackedVector3Array([start])
+	joined.append_array(segment_points.call(start))
+	return _subdivide(joined, ROUTE_STEP).slice(1)
 
 static func _gentle_slope_points() -> PackedVector3Array:
 	return PackedVector3Array(
@@ -53,37 +53,34 @@ static func _gentle_slope_points() -> PackedVector3Array:
 		]
 	)
 
-static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
-	var expected_arc_length: float = sqrt(
-		pow(TAU * CORKSCREW_REVOLUTIONS * CORKSCREW_RADIUS, 2.0) + pow(CORKSCREW_LENGTH, 2.0)
+static func _helix_bend_points(start: Vector3) -> PackedVector3Array:
+	# One continuous, monotonic bend to the right (x keeps increasing) and
+	# down (y keeps decreasing) as the route advances (z keeps decreasing) -
+	# no reversal, no wrapping around past a quarter turn's worth of visual
+	# banking. Point spacing matches the gentle slope and switchback (~150-
+	# 180 z-units apart before _subdivide runs).
+	return PackedVector3Array(
+		[
+			start + Vector3(20.0, -8.0, -150.0),
+			start + Vector3(55.0, -20.0, -320.0),
+			start + Vector3(100.0, -38.0, -500.0),
+			start + Vector3(150.0, -60.0, -680.0),
+			start + Vector3(205.0, -86.0, -850.0),
+			start + Vector3(260.0, -115.0, -1010.0),
+			start + Vector3(315.0, -148.0, -1160.0),
+			start + Vector3(365.0, -184.0, -1300.0),
+		]
 	)
-	var point_count: int = maxi(1, int(ceil(expected_arc_length / ROUTE_STEP)))
-	var points: PackedVector3Array = PackedVector3Array()
-	for i in range(1, point_count + 1):
-		var t: float = float(i) / float(point_count)
-		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
-		var z: float = start.z - t * CORKSCREW_LENGTH
-		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
-		var eased_ramp: float = ramp * ramp * (3.0 - 2.0 * ramp)
-		var radius: float = CORKSCREW_RADIUS * eased_ramp
-		points.append(
-			Vector3(
-				radius * cos(angle),
-				start.y + radius * sin(angle),
-				z
-			)
-		)
-	return points
 
 static func _climbing_switchback_points(start: Vector3) -> PackedVector3Array:
 	return PackedVector3Array(
 		[
-			start + Vector3(30.0, 22.0, -160.0),
-			start + Vector3(-34.0, 52.0, -340.0),
-			start + Vector3(38.0, 87.0, -540.0),
-			start + Vector3(-30.0, 127.0, -760.0),
-			start + Vector3(24.0, 177.0, -990.0),
-			start + Vector3(0.0, 232.0, -1260.0),
+			start + Vector3(48.0, 35.2, -256.0),
+			start + Vector3(-54.4, 83.2, -544.0),
+			start + Vector3(60.8, 139.2, -864.0),
+			start + Vector3(-48.0, 203.2, -1216.0),
+			start + Vector3(38.4, 283.2, -1584.0),
+			start + Vector3(0.0, 371.2, -2016.0),
 		]
 	)
 
@@ -134,9 +131,7 @@ static func guide_overdraw_enabled() -> bool:
 	return false
 
 static func ring_samples() -> int:
-	# The corkscrew alone needs far more resolution than Stage 1's gentle
-	# bends to avoid aliasing into a jagged mess at 25 revolutions.
-	return ROUTE_RING_SAMPLES
+	return 220
 
 static func _hazard(distance: float, lane: int, kind: String) -> Dictionary:
 	return {"distance": distance, "lane": lane, "kind": kind}
