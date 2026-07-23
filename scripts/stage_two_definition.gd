@@ -5,27 +5,46 @@ extends RefCounted
 # StormTube._catmull_rom): it assumes each control-point-to-control-point
 # step covers roughly equal distance. Feeding it hand-placed segments with
 # very different point spacing without equalizing density first can cause
-# real overshoot right at the segment boundary (this route used to have a
-# tightly-wound corkscrew section that measured 100+ degrees of tangent
-# swing in a single sample from exactly that mismatch). ROUTE_STEP
+# real overshoot right at the segment boundary (the corkscrew below is far
+# denser than the gentle slope or switchback; without equalizing, this
+# measured 100+ degrees of tangent swing in a single sample). ROUTE_STEP
 # re-subdivides every segment to roughly the same spacing so the whole
-# route parametrizes evenly, even though the current shape is gentle enough
-# that it isn't strictly load-bearing anymore - cheap insurance to keep.
+# route parametrizes evenly.
 const ROUTE_STEP := 12.0
+
+const CORKSCREW_REVOLUTIONS := 8.0
+const CORKSCREW_RADIUS := 20.0
+# The corkscrew's travel distance (arc length), held fixed regardless of how
+# many revolutions or what radius it's tuned to. Distance is what hazards,
+# gates, and stage pacing are actually keyed to, so retuning how tightly it
+# winds shouldn't silently change how far the stage is - a looser coil of
+# the same wire length just spans more forward space. The forward z-extent
+# is derived from this and the current revolutions/radius, not the other
+# way around (see _corkscrew_points).
+const CORKSCREW_ARC_LENGTH := 2460.0
+# How many of the leading revolutions ease the radius in from 0 to full,
+# smoothstep-eased, instead of snapping straight to full amplitude - avoids
+# a sudden ~60 degree tangent swing right at the gentle-slope handoff.
+const CORKSCREW_RAMP_REVOLUTIONS := 1.0
+const CORKSCREW_RING_SAMPLES := 640
 
 static func route() -> PackedVector3Array:
 	# A distinct shape from Stage 1's route so the two stages don't feel like
 	# the same tunnel with a different enemy list: a gentle, mostly-straight
-	# slope for the first third, a single continuous helical bend to the
-	# right and down for the middle third, and an ascending switchback climb
-	# for the last third. The middle bend deliberately never completes a
-	# full revolution - earlier corkscrew attempts (multiple full turns)
-	# made the whole tube roll around the travel axis, which made hazards
-	# almost impossible to track against a constantly-rotating reference
-	# frame. This is meant to read as one sustained banking turn, not a
-	# spiral you rotate through.
+	# slope for the first third, a genuine multi-revolution corkscrew for
+	# the middle third, and an ascending switchback climb for the last
+	# third. A real spiral necessarily rotates the camera's screen-relative
+	# "up"/"right" through a full turn once per revolution - that's not a
+	# bug to fix, it's what a corkscrew is; see the CLAUDE.md Architecture
+	# note on route control-point axes for how that interacts with this
+	# engine's rotation-minimizing camera frame.
 	var points: PackedVector3Array = _subdivide(_gentle_slope_points(), ROUTE_STEP)
-	points.append_array(_joined_subdivision(points[points.size() - 1], _helix_bend_points))
+	# _corkscrew_points does its own arc-length-based spacing internally
+	# (see its comment) rather than going through _subdivide/
+	# _joined_subdivision like the other segments - the ramp-in's radius
+	# growing from 0 means physical speed varies a lot across the segment,
+	# which uniform-t sampling (what _subdivide assumes) doesn't handle.
+	points.append_array(_corkscrew_points(points[points.size() - 1]))
 	points.append_array(_joined_subdivision(points[points.size() - 1], _climbing_switchback_points))
 	return points
 
@@ -53,32 +72,38 @@ static func _gentle_slope_points() -> PackedVector3Array:
 		]
 	)
 
-static func _helix_bend_points(start: Vector3) -> PackedVector3Array:
-	# One continuous, monotonic bend that reads on screen as right and down
-	# as the route advances (z keeps decreasing) - no reversal, no wrapping
-	# around past a quarter turn's worth of visual banking. World +X and
-	# world -Y here are screen-LEFT and screen-UP, not right/down: the
-	# route's local "up" starts as tangent.cross(right) with right hardcoded
-	# to world +X, which works out to world -Y at the route's start - so
-	# this segment deliberately moves toward world -X and world +Y to land
-	# on screen-right/screen-down (verified directly against the camera's
-	# actual look_at basis, not assumed). Lateral offset grows much faster
-	# than forward depth here (finishes at roughly 1000 units of
-	# sideways+down travel over only 670 forward) for a total direction
-	# change of about 56 degrees end to end - a pronounced, unmistakable
-	# bend, still nowhere near a quarter turn.
-	return PackedVector3Array(
-		[
-			start + Vector3(-60.0, 25.0, -60.0),
-			start + Vector3(-150.0, 65.0, -140.0),
-			start + Vector3(-270.0, 120.0, -230.0),
-			start + Vector3(-410.0, 190.0, -330.0),
-			start + Vector3(-560.0, 270.0, -430.0),
-			start + Vector3(-710.0, 350.0, -530.0),
-			start + Vector3(-830.0, 410.0, -610.0),
-			start + Vector3(-900.0, 450.0, -670.0),
-		]
+static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
+	# Sampled by actual arc length, not by uniform steps in t/angle: during
+	# the ramp-in, radius grows from 0, so physical speed varies a lot
+	# across the segment (near-stationary at the very start, full speed once
+	# the ramp completes). Uniform-t sampling put many points on top of each
+	# other in real space during the ramp despite their angle differing a
+	# lot - measured as a genuinely unstable spline fit (a 0.3-unit step
+	# paired with a 120+ degree tangent swing), not just uneven spacing.
+	# Walking a fine parametric sampling and only emitting a point once
+	# accumulated real distance reaches ROUTE_STEP fixes this at the source.
+	var circumferential: float = TAU * CORKSCREW_REVOLUTIONS * CORKSCREW_RADIUS
+	var forward_length: float = sqrt(
+		maxf(CORKSCREW_ARC_LENGTH * CORKSCREW_ARC_LENGTH - circumferential * circumferential, 0.0)
 	)
+	var fine_steps: int = 4000
+	var points: PackedVector3Array = PackedVector3Array()
+	var last_emitted: Vector3 = start
+	var accumulated: float = 0.0
+	for i in range(1, fine_steps + 1):
+		var t: float = float(i) / float(fine_steps)
+		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
+		var z: float = start.z - t * forward_length
+		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
+		var eased_ramp: float = ramp * ramp * (3.0 - 2.0 * ramp)
+		var radius: float = CORKSCREW_RADIUS * eased_ramp
+		var candidate: Vector3 = Vector3(radius * cos(angle), start.y + radius * sin(angle), z)
+		accumulated += last_emitted.distance_to(candidate)
+		last_emitted = candidate
+		if accumulated >= ROUTE_STEP or i == fine_steps:
+			points.append(candidate)
+			accumulated = 0.0
+	return points
 
 static func _climbing_switchback_points(start: Vector3) -> PackedVector3Array:
 	return PackedVector3Array(
@@ -139,7 +164,10 @@ static func guide_overdraw_enabled() -> bool:
 	return false
 
 static func ring_samples() -> int:
-	return 220
+	# The corkscrew alone needs far more resolution than Stage 1's gentle
+	# bends to avoid aliasing into a jagged mess at CORKSCREW_REVOLUTIONS
+	# revolutions.
+	return CORKSCREW_RING_SAMPLES
 
 static func _hazard(distance: float, lane: int, kind: String) -> Dictionary:
 	return {"distance": distance, "lane": lane, "kind": kind}
