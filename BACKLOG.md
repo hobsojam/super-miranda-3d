@@ -1,32 +1,5 @@
 # Backlog
 
-## Refactor Enemy Skills
-
-Move enemy skill behavior out of `StormStage` now that hazards, pickups, rim
-obstacles, audio, HUD, and projectiles have their own support classes.
-
-Candidate scope:
-
-- Spiker retreat, lane stepping, and spike drop cadence.
-- Pulsar firing cadence and bolt spawn requests.
-- Keep score, damage, sounds, and marker effects in `StormStage` until there is
-  a cleaner event boundary.
-
-## Refactor Stage Flow
-
-Extract the start/restart/stage-clear/continue/game-over state transitions once
-the active gameplay loops are thinner.
-
-This should cover:
-
-- Run state flags and transition timers.
-- Stage start/reset setup.
-- Stage clear and game complete transitions.
-- Player/runner input enablement during overlays.
-
-Avoid doing this before enemy skill extraction, because stage flow still touches
-almost every system.
-
 ## Windows Build Automation
 
 `export_presets.cfg` now has a local "Windows Desktop" preset (see
