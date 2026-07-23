@@ -177,13 +177,19 @@ func _test_marker_factory() -> void:
 func _test_stage_definitions() -> void:
 	var stage_one_hazards: Array[Dictionary] = StageOneDefinitionScript.hazards()
 	var stage_one_pickups: Array[Dictionary] = StageOneDefinitionScript.pickups()
-	_assert_eq(stage_one_hazards.size(), 24, "stage 1 hazard count is preserved")
-	_assert_eq(stage_one_hazards[0], _hazard(720.0, 4, "flipper"), "stage 1 first hazard")
-	_assert_eq(stage_one_hazards[-1], _hazard(3640.0, 2, "exploder"), "stage 1 final hazard")
+	_assert_eq(stage_one_hazards.size(), 31, "stage 1 hazard count is preserved")
+	_assert_eq(stage_one_hazards[0], _hazard(680.0, 4, "flipper"), "stage 1 first hazard")
+	_assert_eq(stage_one_hazards[-1], _hazard(3620.0, 7, "pulsar"), "stage 1 final hazard")
 	_assert_eq(
 		stage_one_pickups,
-		[_pickup(1360.0, 6, "purge"), _pickup(1450.0, 1, "life")],
+		[_pickup(1300.0, 6, "purge"), _pickup(2900.0, 1, "life")],
 		"stage 1 pickups"
+	)
+	var stage_one_gates: Array[Dictionary] = StageOneDefinitionScript.gate_pairs()
+	_assert_eq(
+		stage_one_gates,
+		[_gate_pair(3680.0, 6, 10, 1)],
+		"stage 1 has a single capstone gate"
 	)
 	_assert_true(StageOneDefinitionScript.guide_overdraw_enabled(), "stage 1 keeps guide overdraw")
 

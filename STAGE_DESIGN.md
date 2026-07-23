@@ -95,7 +95,16 @@ phases: each kind (flipper → spiker → splitter → pulsar → exploder) gets
 its own solo debut with real spacing, phase 3 combines flipper + spiker
 before pulsar/exploder are introduced, phase 4 thins out to one easy
 flipper plus the `life` pickup as a reward beat, and phase 5 combines
-everything at higher density than before. There's still no gate — density
-and combination alone carry the climax, which is the point: phase 5 didn't
-need a capstone mechanic to land. See `scripts/stage_one_definition.gd` and
-`BACKLOG.md` for any remaining open stage-content decisions.
+everything at higher density than before.
+
+Density alone wasn't quite enough, though — with just a harder mix of
+known enemies, the finale read as "more of the same, faster" rather than
+an ending, because nothing in it was mechanically different from what came
+before. The fix was one single gate as a capstone, not a gauntlet (Stage 2
+already owns gates as a recurring mechanic): a lone, generously wide gate
+placed right at the very end, revealed early enough to sit on the horizon
+through most of phase 5. That's the practical version of "a capstone is
+optional, not the definition" — Stage 1 didn't need one to satisfy the
+letter of phase 5, but it needed one to actually feel like a finish line.
+See `scripts/stage_one_definition.gd` and `BACKLOG.md` for any remaining
+open stage-content decisions.
