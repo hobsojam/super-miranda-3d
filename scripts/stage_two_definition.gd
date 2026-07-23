@@ -18,7 +18,7 @@ const CORKSCREW_RADIUS := 20.0
 # many revolutions or what radius it's tuned to. Distance is what hazards,
 # gates, and stage pacing are actually keyed to, so retuning how tightly it
 # winds shouldn't silently change how far the stage is - a looser coil of
-# the same wire length just spans more forward space. The forward z-extent
+# the same wire length just spans more downward space. The descent depth
 # is derived from this and the current revolutions/radius, not the other
 # way around (see _corkscrew_points).
 const CORKSCREW_ARC_LENGTH := 2460.0
@@ -33,11 +33,16 @@ static func route() -> PackedVector3Array:
 	# the same tunnel with a different enemy list: a gentle, mostly-straight
 	# slope for the first third, a genuine multi-revolution corkscrew for
 	# the middle third, and an ascending switchback climb for the last
-	# third. A real spiral necessarily rotates the camera's screen-relative
-	# "up"/"right" through a full turn once per revolution - that's not a
-	# bug to fix, it's what a corkscrew is; see the CLAUDE.md Architecture
-	# note on route control-point axes for how that interacts with this
-	# engine's rotation-minimizing camera frame.
+	# third. The corkscrew coils around a downward axis rather than the
+	# direction of travel - a snake coiled on the ground, not a drill bit
+	# boring straight ahead - so the incoming forward direction actually
+	# loops back over itself each revolution instead of just spiraling
+	# further away (see _corkscrew_points). A real spiral also necessarily
+	# rotates the camera's screen-relative "up"/"right" through a full turn
+	# once per revolution - that's not a bug to fix, it's what a corkscrew
+	# is; see the CLAUDE.md Architecture note on route control-point axes
+	# for how that interacts with this engine's rotation-minimizing camera
+	# frame.
 	var points: PackedVector3Array = _subdivide(_gentle_slope_points(), ROUTE_STEP)
 	# _corkscrew_points does its own arc-length-based spacing internally
 	# (see its comment) rather than going through _subdivide/
@@ -73,6 +78,14 @@ static func _gentle_slope_points() -> PackedVector3Array:
 	)
 
 static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
+	# Coils around a DOWNWARD axis, not the direction of travel: loops lie
+	# in the horizontal-ish x/z plane and stack downward (y keeps
+	# decreasing) as they progress - a snake coiled on the ground, not a
+	# drill bit boring straight ahead. z (the incoming forward direction)
+	# oscillates back and forth each loop instead of monotonically
+	# decreasing, so the path genuinely loops back over where it's already
+	# been, the way a coiled body loops back over its own earlier coils.
+	#
 	# Sampled by actual arc length, not by uniform steps in t/angle: during
 	# the ramp-in, radius grows from 0, so physical speed varies a lot
 	# across the segment (near-stationary at the very start, full speed once
@@ -83,7 +96,7 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 	# Walking a fine parametric sampling and only emitting a point once
 	# accumulated real distance reaches ROUTE_STEP fixes this at the source.
 	var circumferential: float = TAU * CORKSCREW_REVOLUTIONS * CORKSCREW_RADIUS
-	var forward_length: float = sqrt(
+	var descent_length: float = sqrt(
 		maxf(CORKSCREW_ARC_LENGTH * CORKSCREW_ARC_LENGTH - circumferential * circumferential, 0.0)
 	)
 	var fine_steps: int = 4000
@@ -93,11 +106,11 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 	for i in range(1, fine_steps + 1):
 		var t: float = float(i) / float(fine_steps)
 		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
-		var z: float = start.z - t * forward_length
+		var y: float = start.y - t * descent_length
 		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
 		var eased_ramp: float = ramp * ramp * (3.0 - 2.0 * ramp)
 		var radius: float = CORKSCREW_RADIUS * eased_ramp
-		var candidate: Vector3 = Vector3(radius * cos(angle), start.y + radius * sin(angle), z)
+		var candidate: Vector3 = Vector3(radius * cos(angle), y, start.z + radius * sin(angle))
 		accumulated += last_emitted.distance_to(candidate)
 		last_emitted = candidate
 		if accumulated >= ROUTE_STEP or i == fine_steps:
