@@ -64,27 +64,34 @@ static func _joined_subdivision(start: Vector3, segment_points: Callable) -> Pac
 	return _subdivide(joined, ROUTE_STEP).slice(1)
 
 static func _gentle_slope_points() -> PackedVector3Array:
+	# +Y here reads as screen-DOWN this early in the route (verified against
+	# the camera's actual look_at basis, same as the note on route
+	# control-point axes in CLAUDE.md) - -Y would read as climbing, not
+	# descending.
 	return PackedVector3Array(
 		[
 			Vector3(0.0, 0.0, 0.0),
-			Vector3(0.0, -2.0, -40.0),
-			Vector3(4.0, -6.0, -110.0),
-			Vector3(-3.0, -11.0, -190.0),
-			Vector3(6.0, -17.0, -280.0),
-			Vector3(-4.0, -24.0, -380.0),
-			Vector3(3.0, -32.0, -490.0),
-			Vector3(0.0, -41.0, -610.0),
+			Vector3(0.0, 2.0, -40.0),
+			Vector3(4.0, 6.0, -110.0),
+			Vector3(-3.0, 11.0, -190.0),
+			Vector3(6.0, 17.0, -280.0),
+			Vector3(-4.0, 24.0, -380.0),
+			Vector3(3.0, 32.0, -490.0),
+			Vector3(0.0, 41.0, -610.0),
 		]
 	)
 
 static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 	# Coils around a DOWNWARD axis, not the direction of travel: loops lie
-	# in the horizontal-ish x/z plane and stack downward (y keeps
-	# decreasing) as they progress - a snake coiled on the ground, not a
-	# drill bit boring straight ahead. z (the incoming forward direction)
-	# oscillates back and forth each loop instead of monotonically
-	# decreasing, so the path genuinely loops back over where it's already
-	# been, the way a coiled body loops back over its own earlier coils.
+	# in the horizontal-ish x/z plane and stack downward as they progress -
+	# a snake coiled on the ground, not a drill bit boring straight ahead.
+	# y keeps increasing here, not decreasing: verified against the
+	# camera's actual look_at basis that +y reads as screen-DOWN this early
+	# in the route, same as the note on route control-point axes in
+	# CLAUDE.md. z (the incoming forward direction) oscillates back and
+	# forth each loop instead of monotonically decreasing, so the path
+	# genuinely loops back over where it's already been, the way a coiled
+	# body loops back over its own earlier coils.
 	#
 	# Sampled by actual arc length, not by uniform steps in t/angle: during
 	# the ramp-in, radius grows from 0, so physical speed varies a lot
@@ -106,7 +113,7 @@ static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
 	for i in range(1, fine_steps + 1):
 		var t: float = float(i) / float(fine_steps)
 		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
-		var y: float = start.y - t * descent_length
+		var y: float = start.y + t * descent_length
 		var ramp: float = clampf(angle / (CORKSCREW_RAMP_REVOLUTIONS * TAU), 0.0, 1.0)
 		var eased_ramp: float = ramp * ramp * (3.0 - 2.0 * ramp)
 		var radius: float = CORKSCREW_RADIUS * eased_ramp
