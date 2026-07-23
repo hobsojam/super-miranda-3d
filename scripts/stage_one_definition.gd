@@ -115,6 +115,9 @@ static func gate_pairs() -> Array[Dictionary]:
 static func guide_overdraw_enabled() -> bool:
 	return true
 
+static func ring_samples() -> int:
+	return 220
+
 static func _hazard(distance: float, lane: int, kind: String) -> Dictionary:
 	return {"distance": distance, "lane": lane, "kind": kind}
 

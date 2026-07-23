@@ -1,19 +1,36 @@
 class_name StageTwoDefinition
 extends RefCounted
 
-const CORKSCREW_TURN_COUNT := 16
-const CORKSCREW_REVOLUTIONS := 2.5
-const CORKSCREW_RADIUS := 26.0
+const CORKSCREW_REVOLUTIONS := 25.0
+const CORKSCREW_RADIUS := 14.0
 const CORKSCREW_LENGTH := 1220.0
+const ROUTE_RING_SAMPLES := 640
+
+# This engine's Catmull-Rom uses uniform, index-based parametrization (see
+# StormTube._catmull_rom): it assumes each control-point-to-control-point
+# step covers roughly equal distance. The corkscrew needs far denser points
+# than a gentle slope or switchback ever would; feeding those straight into
+# one spline without equalizing density causes a severe overshoot right at
+# the segment boundary (measured: 100+ degrees of tangent swing in a single
+# sample). ROUTE_STEP re-subdivides every segment to roughly the same
+# spacing so the whole route parametrizes evenly.
+const ROUTE_STEP := 12.0
 
 static func route() -> PackedVector3Array:
 	# A distinct shape from Stage 1's route so the two stages don't feel like
 	# the same tunnel with a different enemy list: a gentle, mostly-straight
 	# slope for the first third, a tight corkscrew for the middle third, and
 	# an ascending switchback climb for the last third.
-	var points: PackedVector3Array = _gentle_slope_points()
+	var points: PackedVector3Array = _subdivide(_gentle_slope_points(), ROUTE_STEP)
 	points.append_array(_corkscrew_points(points[points.size() - 1]))
-	points.append_array(_climbing_switchback_points(points[points.size() - 1]))
+	var corkscrew_end: Vector3 = points[points.size() - 1]
+	var switchback: PackedVector3Array = PackedVector3Array([corkscrew_end])
+	switchback.append_array(_climbing_switchback_points(corkscrew_end))
+	# Slice off the leading point: it's corkscrew_end again, already the last
+	# entry in `points`, included here only so _subdivide can smooth this
+	# specific seam too (see the ROUTE_STEP comment above for why unequal
+	# density between segments matters, not just within them).
+	points.append_array(_subdivide(switchback, ROUTE_STEP).slice(1))
 	return points
 
 static func _gentle_slope_points() -> PackedVector3Array:
@@ -31,9 +48,13 @@ static func _gentle_slope_points() -> PackedVector3Array:
 	)
 
 static func _corkscrew_points(start: Vector3) -> PackedVector3Array:
+	var expected_arc_length: float = sqrt(
+		pow(TAU * CORKSCREW_REVOLUTIONS * CORKSCREW_RADIUS, 2.0) + pow(CORKSCREW_LENGTH, 2.0)
+	)
+	var point_count: int = maxi(1, int(ceil(expected_arc_length / ROUTE_STEP)))
 	var points: PackedVector3Array = PackedVector3Array()
-	for i in range(1, CORKSCREW_TURN_COUNT + 1):
-		var t: float = float(i) / float(CORKSCREW_TURN_COUNT)
+	for i in range(1, point_count + 1):
+		var t: float = float(i) / float(point_count)
 		var angle: float = t * CORKSCREW_REVOLUTIONS * TAU
 		var z: float = start.z - t * CORKSCREW_LENGTH
 		points.append(
@@ -56,6 +77,16 @@ static func _climbing_switchback_points(start: Vector3) -> PackedVector3Array:
 			start + Vector3(0.0, 232.0, -1260.0),
 		]
 	)
+
+static func _subdivide(points: PackedVector3Array, step: float) -> PackedVector3Array:
+	var result: PackedVector3Array = PackedVector3Array([points[0]])
+	for i in range(1, points.size()):
+		var a: Vector3 = points[i - 1]
+		var b: Vector3 = points[i]
+		var steps: int = maxi(1, int(ceil(a.distance_to(b) / step)))
+		for s in range(1, steps + 1):
+			result.append(a.lerp(b, float(s) / float(steps)))
+	return result
 
 static func hazards() -> Array[Dictionary]:
 	return [
@@ -92,6 +123,11 @@ static func gate_pairs() -> Array[Dictionary]:
 
 static func guide_overdraw_enabled() -> bool:
 	return false
+
+static func ring_samples() -> int:
+	# The corkscrew alone needs far more resolution than Stage 1's gentle
+	# bends to avoid aliasing into a jagged mess at 25 revolutions.
+	return ROUTE_RING_SAMPLES
 
 static func _hazard(distance: float, lane: int, kind: String) -> Dictionary:
 	return {"distance": distance, "lane": lane, "kind": kind}

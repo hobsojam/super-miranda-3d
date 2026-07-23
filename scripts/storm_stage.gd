@@ -48,7 +48,7 @@ func _ready() -> void:
 	_player = get_node(player_path) as StormPlayer
 	_hud_label = get_node(hud_label_path) as Label
 	_player.fire_requested.connect(_on_player_fire_requested)
-	_storm.rebuild_route(_stage_route(1))
+	_rebuild_stage_route(1)
 	_setup_audio()
 	_setup_hud()
 	_setup_hazards()
@@ -152,7 +152,7 @@ func _start_stage(stage: int) -> void:
 	_player.reset_fire_cooldown()
 	_runner.restart_run()
 	_clear_active_state()
-	_storm.rebuild_route(_stage_route(_flow.stage))
+	_rebuild_stage_route(_flow.stage)
 	_hazards.set_stage_end_distance(_stage_end_distance())
 	_build_stage_for(_flow.stage)
 	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_flow.stage))
@@ -206,6 +206,15 @@ func _stage_route(stage: int) -> PackedVector3Array:
 	if stage == 2:
 		return StageTwoDefinition.route()
 	return StageOneDefinition.route()
+
+func _stage_ring_samples(stage: int) -> int:
+	if stage == 2:
+		return StageTwoDefinition.ring_samples()
+	return StageOneDefinition.ring_samples()
+
+func _rebuild_stage_route(stage: int) -> void:
+	_storm.ring_samples = _stage_ring_samples(stage)
+	_storm.rebuild_route(_stage_route(stage))
 
 func _add_stage_hazard(
 	distance: float,
@@ -324,7 +333,7 @@ func _on_hud_stage_selected(stage: int) -> void:
 	if _flow.run_active:
 		return
 	_flow.stage = stage
-	_storm.rebuild_route(_stage_route(_flow.stage))
+	_rebuild_stage_route(_flow.stage)
 	_hazards.set_stage_end_distance(_stage_end_distance())
 	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_flow.stage))
 	_audio.load_music_stage(_flow.stage)
@@ -375,7 +384,7 @@ func _continue_to_pending_stage() -> void:
 	_runner.set_input_enabled(true)
 	_player.set_fire_enabled(true)
 	_player.reset_fire_cooldown()
-	_storm.rebuild_route(_stage_route(_flow.stage))
+	_rebuild_stage_route(_flow.stage)
 	_hazards.set_stage_end_distance(_stage_end_distance())
 	_storm.set_guide_overdraw_enabled(_stage_guide_overdraw_enabled(_flow.stage))
 	_audio.load_music_stage(_flow.stage)
