@@ -3,15 +3,16 @@
 ## Windows Build Automation
 
 `export_presets.cfg` has a local "Windows Desktop" preset (see `AGENTS.md`
-for how to run it), and CI now builds it on every push/PR and uploads the
-`.exe` as a workflow artifact (`windows-build` job in
-`.github/workflows/ci.yml`). Not done yet:
+for how to run it), CI builds it on every push/PR and uploads the `.exe`
+as a workflow artifact (`windows-build` job in
+`.github/workflows/ci.yml`), and pushing a `vMAJOR.MINOR.PATCH` tag (see
+`AGENTS.md`'s Versioning section) runs `.github/workflows/release.yml` to
+export the build, zip it, and publish a GitHub Release via
+`gh release create`.
 
-- Automated GitHub Releases publishing the `.exe` on version tags
-  (`vMAJOR.MINOR.PATCH` — see `AGENTS.md`'s Versioning section). Needs a
-  release workflow triggered on `push: tags: ['v*']` that reuses the
-  `windows-build` job's export steps, zips the result, and publishes it
-  with `gh release create`.
+Not verified yet: the release workflow has never actually run against a
+real tag push, only YAML-validated. Watch the first `v*` tag push closely
+and be ready to fix it live.
 
 ## Environmental Hazards
 
