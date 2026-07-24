@@ -250,6 +250,7 @@ func _build_state_overlay() -> void:
 	_stage_selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stage_selector.add_item("Stage 1", 1)
 	_stage_selector.add_item("Stage 2", 2)
+	_stage_selector.add_item("Stage 3", 3)
 	_stage_selector.item_selected.connect(_on_stage_selected)
 	selector_row.add_child(_stage_selector)
 

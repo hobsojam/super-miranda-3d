@@ -2,6 +2,7 @@ class_name StormStage
 extends Node
 
 const STAGE_TRANSITION_TIME := 1.85
+const FINAL_STAGE := 3
 
 @export var storm_path: NodePath
 @export var runner_path: NodePath
@@ -185,6 +186,12 @@ func _build_stage_for(stage: int) -> void:
 		_add_pickup(pickup["distance"], pickup["lane"], pickup["kind"])
 
 func _stage_definition(stage: int) -> Dictionary:
+	if stage == 3:
+		return {
+			"hazards": StageThreeDefinition.hazards(),
+			"pickups": StageThreeDefinition.pickups(),
+			"gate_pairs": StageThreeDefinition.gate_pairs(),
+		}
 	if stage == 2:
 		return {
 			"hazards": StageTwoDefinition.hazards(),
@@ -198,16 +205,22 @@ func _stage_definition(stage: int) -> Dictionary:
 	}
 
 func _stage_guide_overdraw_enabled(stage: int) -> bool:
+	if stage == 3:
+		return StageThreeDefinition.guide_overdraw_enabled()
 	if stage == 2:
 		return StageTwoDefinition.guide_overdraw_enabled()
 	return StageOneDefinition.guide_overdraw_enabled()
 
 func _stage_route(stage: int) -> PackedVector3Array:
+	if stage == 3:
+		return StageThreeDefinition.route()
 	if stage == 2:
 		return StageTwoDefinition.route()
 	return StageOneDefinition.route()
 
 func _stage_ring_samples(stage: int) -> int:
+	if stage == 3:
+		return StageThreeDefinition.ring_samples()
 	if stage == 2:
 		return StageTwoDefinition.ring_samples()
 	return StageOneDefinition.ring_samples()
@@ -353,7 +366,7 @@ func _advance_stage() -> void:
 	_clear_rim_obstacles()
 	for hazard in _hazards.all():
 		hazard.cleared = true
-	if next_stage == 2:
+	if next_stage <= FINAL_STAGE:
 		_flow.begin_stage_clear_transition(next_stage, STAGE_TRANSITION_TIME)
 		_score += _flow.last_stage_time_bonus
 		_runner.set_input_enabled(false)

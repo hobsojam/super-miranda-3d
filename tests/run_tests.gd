@@ -6,6 +6,7 @@ const StageHudScript := preload("res://scripts/stage_hud.gd")
 const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd")
 const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
 const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
+const StageThreeDefinitionScript := preload("res://scripts/stage_three_definition.gd")
 const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd")
 const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd")
 const StagePickupRuntimeScript := preload("res://scripts/stage_pickup_runtime.gd")
@@ -241,6 +242,23 @@ func _test_stage_definitions() -> void:
 		"stage 2 disables guide overdraw"
 	)
 
+	var stage_three_hazards: Array[Dictionary] = StageThreeDefinitionScript.hazards()
+	var stage_three_pickups: Array[Dictionary] = StageThreeDefinitionScript.pickups()
+	var stage_three_gates: Array[Dictionary] = StageThreeDefinitionScript.gate_pairs()
+	_assert_eq(stage_three_hazards.size(), 16, "stage 3 hazard count is preserved")
+	_assert_eq(stage_three_hazards[0], _hazard(920.0, 2, "flipper"), "stage 3 first hazard")
+	_assert_eq(stage_three_gates[0], _gate_pair(4720.0, 0, 4, 1), "stage 3 first gate")
+	_assert_eq(stage_three_gates[-1], _gate_pair(5225.0, 5, 10, 5), "stage 3 final gate")
+	_assert_eq(
+		stage_three_pickups,
+		[_pickup(3300.0, 4, "life"), _pickup(4600.0, 4, "purge")],
+		"stage 3 pickups"
+	)
+	_assert_true(
+		not StageThreeDefinitionScript.guide_overdraw_enabled(),
+		"stage 3 disables guide overdraw"
+	)
+
 func _test_rim_obstacle_rules() -> void:
 	_assert_true(RimObstacleManagerScript.should_anchor_kind("flipper"), "flippers anchor")
 	_assert_true(not RimObstacleManagerScript.should_anchor_kind("gate_field"), "fields do not anchor")
@@ -432,7 +450,7 @@ func _test_stage_flow_runtime() -> void:
 	var flow: StageFlowRuntime = StageFlowRuntimeScript.new()
 
 	flow.start_stage(5)
-	_assert_eq(flow.stage, 2, "start_stage clamps to the max stage")
+	_assert_eq(flow.stage, 3, "start_stage clamps to the max stage")
 	_assert_true(flow.run_active, "start_stage activates the run")
 	_assert_true(not flow.game_over, "start_stage clears game over")
 	_assert_true(not flow.game_complete, "start_stage clears game complete")
