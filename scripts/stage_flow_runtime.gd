@@ -23,7 +23,7 @@ func status_label() -> String:
 	return ""
 
 func start_stage(stage_to_start: int) -> void:
-	stage = clampi(stage_to_start, 1, 2)
+	stage = clampi(stage_to_start, 1, 3)
 	game_over = false
 	game_complete = false
 	run_active = true
