@@ -59,7 +59,8 @@ func _test_stage_time_bonus() -> void:
 func _test_stage_audio() -> void:
 	_assert_eq(StageAudioScript.music_stage_for(1), 1, "uses stage 1 music for stage 1")
 	_assert_eq(StageAudioScript.music_stage_for(2), 2, "uses stage 2 music for stage 2")
-	_assert_eq(StageAudioScript.music_stage_for(99), 2, "caps music lookup at stage 2")
+	_assert_eq(StageAudioScript.music_stage_for(3), 3, "uses stage 3 music for stage 3")
+	_assert_eq(StageAudioScript.music_stage_for(99), 3, "caps music lookup at stage 3")
 	_assert_float_eq(StageAudioScript.target_intensity(0, 0, 5), 0.0, "low pressure is quiet")
 	_assert_float_eq(StageAudioScript.target_intensity(3, 0, 6), 0.5, "middle pressure blends")
 	_assert_float_eq(StageAudioScript.target_intensity(8, 0, 5), 1.0, "high pressure caps")

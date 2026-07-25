@@ -16,6 +16,13 @@ const STAGE_MUSIC := {
 		"drums_high_b": "res://audio/music/stage2_drums_electro_b.wav",
 		"drums_low": "res://audio/music/stage2_drums_sparse.wav",
 	},
+	3: {
+		"base_a": "res://audio/music/stage3_base_a.wav",
+		"base_b": "res://audio/music/stage3_base_b.wav",
+		"drums_high_a": "res://audio/music/stage3_drums_industrial_a.wav",
+		"drums_high_b": "res://audio/music/stage3_drums_industrial_b.wav",
+		"drums_low": "res://audio/music/stage3_drums_sparse.wav",
+	},
 }
 
 const FIRE_SOUND := preload("res://audio/sfx/player_fire.wav")
@@ -38,7 +45,7 @@ var _loaded_music_stage: int = 0
 var _music_intensity: float = 0.0
 
 static func music_stage_for(stage: int) -> int:
-	return 2 if stage >= 2 else 1
+	return clampi(stage, 1, 3)
 
 static func target_intensity(
 	active_pressure: int,

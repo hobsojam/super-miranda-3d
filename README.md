@@ -10,7 +10,9 @@ Missed enemies do not just vanish. They can reach the rim and become obstacles i
 
 ## Current Version
 
-The current build has two playable stages, each with its own enemy pattern and music. Stage 1 keeps the bright guide-line Storm look; Stage 2 strips that back into a darker, more opaque tunnel.
+The current build has three playable stages, each with its own route, enemy pattern, and music.
+Stage 1 keeps the bright guide-line Storm look, Stage 2 strips that back into a darker
+corkscrew, and Stage 3 closes with a downhill slalom.
 
 Enemies each have their own job:
 
