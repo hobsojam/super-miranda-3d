@@ -23,6 +23,20 @@ const STAGE_MUSIC := {
 		"drums_high_b": "res://audio/music/stage3_drums_industrial_b.wav",
 		"drums_low": "res://audio/music/stage3_drums_sparse.wav",
 	},
+	4: {
+		"base_a": "res://audio/music/stage4_base_a.wav",
+		"base_b": "res://audio/music/stage4_base_b.wav",
+		"drums_high_a": "res://audio/music/stage4_drums_cyberdub_a.wav",
+		"drums_high_b": "res://audio/music/stage4_drums_cyberdub_b.wav",
+		"drums_low": "res://audio/music/stage4_drums_sparse.wav",
+	},
+	5: {
+		"base_a": "res://audio/music/stage5_base_a.wav",
+		"base_b": "res://audio/music/stage5_base_b.wav",
+		"drums_high_a": "res://audio/music/stage5_drums_psytrance_a.wav",
+		"drums_high_b": "res://audio/music/stage5_drums_psytrance_b.wav",
+		"drums_low": "res://audio/music/stage5_drums_sparse.wav",
+	},
 }
 
 const FIRE_SOUND := preload("res://audio/sfx/player_fire.wav")
@@ -33,6 +47,8 @@ const GAME_OVER_SOUND := preload("res://audio/sfx/game_over.wav")
 const EXPLODER_SOUND := preload("res://audio/sfx/exploder_boom.wav")
 const LIFE_PICKUP_SOUND := preload("res://audio/sfx/pickup_life.wav")
 const PURGE_PICKUP_SOUND := preload("res://audio/sfx/pickup_purge.wav")
+const REACTOR_SOUND := preload("res://audio/sfx/reactor_discharge.wav")
+const STORM_FRONT_SOUND := preload("res://audio/sfx/storm_front_impact.wav")
 
 var _base_player: AudioStreamPlayer
 var _drums_high_player: AudioStreamPlayer
@@ -45,7 +61,7 @@ var _loaded_music_stage: int = 0
 var _music_intensity: float = 0.0
 
 static func music_stage_for(stage: int) -> int:
-	return clampi(stage, 1, 3)
+	return clampi(stage, 1, 5)
 
 static func target_intensity(
 	active_pressure: int,
@@ -56,6 +72,13 @@ static func target_intensity(
 		return 0.0
 	var span: float = float(high_obstacles - low_obstacles)
 	return clampf(float(active_pressure - low_obstacles) / span, 0.0, 1.0)
+
+static func minimum_intensity_for_stage(stage: int) -> float:
+	return 0.04 if stage >= 3 else 0.0
+
+static func crossfade_gains(intensity: float) -> Vector2:
+	var clamped_intensity: float = clampf(intensity, 0.0, 1.0)
+	return Vector2(sqrt(1.0 - clamped_intensity), sqrt(clamped_intensity))
 
 static func damage_sound_volume(sound: AudioStream) -> float:
 	if sound == EXPLODER_SOUND:
@@ -100,9 +123,8 @@ func load_music_stage(stage: int) -> void:
 	var low_drums: AudioStream = load(stems["drums_low"])
 	_set_loop(low_drums, AudioStreamWAV.LOOP_FORWARD)
 	_drums_low_player.stream = low_drums
-	_drums_low_player.volume_db = 0.0
-	_drums_high_player.volume_db = -80.0
-	_music_intensity = 0.0
+	_music_intensity = minimum_intensity_for_stage(resolved_stage)
+	_apply_music_intensity()
 	_pass_index = 0
 	_play_current_music_pass()
 	_drums_low_player.play()
@@ -117,9 +139,9 @@ func update_music_intensity(
 	if _drums_high_player == null or _drums_low_player == null:
 		return
 	var target: float = target_intensity(active_pressure, low_obstacles, high_obstacles)
+	target = maxf(target, minimum_intensity_for_stage(_loaded_music_stage))
 	_music_intensity = lerpf(_music_intensity, target, clampf(delta * crossfade_speed, 0.0, 1.0))
-	_drums_high_player.volume_db = linear_to_db(clampf(_music_intensity, 0.001, 1.0))
-	_drums_low_player.volume_db = linear_to_db(clampf(1.0 - _music_intensity, 0.001, 1.0))
+	_apply_music_intensity()
 
 func play_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
 	_sfx_player.stream = stream
@@ -143,6 +165,11 @@ func _play_current_music_pass() -> void:
 	_base_player.volume_db = -9.0
 	_drums_high_player.play()
 	_base_player.play()
+
+func _apply_music_intensity() -> void:
+	var gains: Vector2 = crossfade_gains(_music_intensity)
+	_drums_low_player.volume_db = linear_to_db(maxf(gains.x, 0.001))
+	_drums_high_player.volume_db = linear_to_db(maxf(gains.y, 0.001))
 
 func _on_music_pass_finished() -> void:
 	_pass_index = (_pass_index + 1) % _base_passes.size()

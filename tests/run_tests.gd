@@ -7,9 +7,13 @@ const StageMarkerFactoryScript := preload("res://scripts/stage_marker_factory.gd
 const StageOneDefinitionScript := preload("res://scripts/stage_one_definition.gd")
 const StageTwoDefinitionScript := preload("res://scripts/stage_two_definition.gd")
 const StageThreeDefinitionScript := preload("res://scripts/stage_three_definition.gd")
+const StageFourDefinitionScript := preload("res://scripts/stage_four_definition.gd")
+const StageFiveDefinitionScript := preload("res://scripts/stage_five_definition.gd")
 const RimObstacleManagerScript := preload("res://scripts/rim_obstacle_manager.gd")
 const StageHazardRuntimeScript := preload("res://scripts/stage_hazard_runtime.gd")
 const StagePickupRuntimeScript := preload("res://scripts/stage_pickup_runtime.gd")
+const StageEnvironmentRuntimeScript := preload("res://scripts/stage_environment_runtime.gd")
+const StageStormFrontRuntimeScript := preload("res://scripts/stage_storm_front_runtime.gd")
 const StageProjectileRuntimeScript := preload("res://scripts/stage_projectile_runtime.gd")
 const EnemySkillRuntimeScript := preload("res://scripts/enemy_skill_runtime.gd")
 const StageFlowRuntimeScript := preload("res://scripts/stage_flow_runtime.gd")
@@ -29,6 +33,8 @@ func _initialize() -> void:
 	_test_rim_obstacle_rules()
 	_test_hazard_runtime()
 	_test_pickup_runtime()
+	_test_environment_runtime()
+	_test_storm_front_runtime()
 	_test_projectile_runtime()
 	_test_enemy_skill_runtime()
 	_test_stage_flow_runtime()
@@ -60,11 +66,26 @@ func _test_stage_audio() -> void:
 	_assert_eq(StageAudioScript.music_stage_for(1), 1, "uses stage 1 music for stage 1")
 	_assert_eq(StageAudioScript.music_stage_for(2), 2, "uses stage 2 music for stage 2")
 	_assert_eq(StageAudioScript.music_stage_for(3), 3, "uses stage 3 music for stage 3")
-	_assert_eq(StageAudioScript.music_stage_for(99), 3, "caps music lookup at stage 3")
+	_assert_eq(StageAudioScript.music_stage_for(4), 4, "uses stage 4 music for stage 4")
+	_assert_eq(StageAudioScript.music_stage_for(5), 5, "uses stage 5 music for stage 5")
+	_assert_eq(StageAudioScript.music_stage_for(99), 5, "caps music lookup at stage 5")
 	_assert_float_eq(StageAudioScript.target_intensity(0, 0, 5), 0.0, "low pressure is quiet")
 	_assert_float_eq(StageAudioScript.target_intensity(3, 0, 6), 0.5, "middle pressure blends")
 	_assert_float_eq(StageAudioScript.target_intensity(8, 0, 5), 1.0, "high pressure caps")
 	_assert_float_eq(StageAudioScript.target_intensity(5, 5, 5), 0.0, "invalid span is quiet")
+	_assert_float_eq(
+		StageAudioScript.minimum_intensity_for_stage(2),
+		0.0,
+		"early stages keep their original sparse mix"
+	)
+	_assert_float_eq(
+		StageAudioScript.minimum_intensity_for_stage(3),
+		0.04,
+		"later stages retain a full drum bed"
+	)
+	var midpoint_gains: Vector2 = StageAudioScript.crossfade_gains(0.5)
+	_assert_float_eq(midpoint_gains.x, sqrt(0.5), "low drums use equal-power fade")
+	_assert_float_eq(midpoint_gains.y, sqrt(0.5), "high drums use equal-power fade")
 	_assert_float_eq(
 		StageAudioScript.damage_sound_volume(StageAudioScript.EXPLODER_SOUND),
 		-5.0,
@@ -168,6 +189,7 @@ func _test_stage_hud() -> void:
 	_assert_true(not banner.visible, "pickup banner hides after it fully expires")
 
 	var stage_selector: OptionButton = hud.find_child("StageSelector", true, false) as OptionButton
+	_assert_eq(stage_selector.item_count, 5, "stage selector includes stage 5")
 	_assert_true(
 		hud.has_state_control_focus_owner(stage_selector),
 		"stage selector focus belongs to menu modal"
@@ -206,6 +228,26 @@ func _test_marker_factory() -> void:
 		"bullet marker uses unshaded material"
 	)
 	bullet.free()
+
+	var reactor_panel: Node3D = StageMarkerFactoryScript.build_reactor_panel_marker()
+	_assert_true(_count_meshes(reactor_panel) > 0, "reactor panel creates visible mesh parts")
+	StageMarkerFactoryScript.set_reactor_panel_state(reactor_panel, 2, 1.0)
+	_assert_true(
+		(reactor_panel.get_node("Active") as Node3D).visible,
+		"reactor panel shows its active state"
+	)
+	_assert_true(
+		not (reactor_panel.get_node("Inactive") as Node3D).visible,
+		"reactor panel hides its inactive state while active"
+	)
+	reactor_panel.free()
+
+	var storm_front: Node3D = StageMarkerFactoryScript.build_storm_front_marker(12.0, 16, 5)
+	_assert_true(_count_meshes(storm_front) >= 20, "storm front creates a readable barrier ring")
+	root.add_child(storm_front)
+	StageMarkerFactoryScript.set_storm_front_pose(storm_front, Basis.IDENTITY, 1.2, 1.0)
+	_assert_float_eq(storm_front.rotation.z, 1.2, "storm front rolls around route forward")
+	storm_front.free()
 
 func _test_stage_definitions() -> void:
 	var stage_one_hazards: Array[Dictionary] = StageOneDefinitionScript.hazards()
@@ -258,6 +300,67 @@ func _test_stage_definitions() -> void:
 	_assert_true(
 		not StageThreeDefinitionScript.guide_overdraw_enabled(),
 		"stage 3 disables guide overdraw"
+	)
+
+	var stage_four_hazards: Array[Dictionary] = StageFourDefinitionScript.hazards()
+	var stage_four_panels: Array[Dictionary] = StageFourDefinitionScript.environmental_hazards()
+	_assert_eq(stage_four_hazards.size(), 23, "stage 4 has its authored enemy pressure")
+	_assert_eq(stage_four_hazards[0], _hazard(1210.0, 8, "flipper"), "stage 4 first enemy")
+	_assert_eq(stage_four_hazards[-1], _hazard(4040.0, 15, "exploder"), "stage 4 final enemy")
+	_assert_eq(stage_four_panels.size(), 106, "stage 4 has its authored reactor panels")
+	_assert_eq(
+		stage_four_panels[0],
+		{"distance": 720.0, "lane": 2, "phase_offset": 0.0},
+		"stage 4 first reactor panel"
+	)
+	_assert_eq(
+		StageFourDefinitionScript.pickups(),
+		[_pickup(2260.0, 6, "purge"), _pickup(2920.0, 4, "life")],
+		"stage 4 pickups"
+	)
+	_assert_true(StageFourDefinitionScript.gate_pairs().is_empty(), "stage 4 does not reuse gates")
+	_assert_true(
+		not StageFourDefinitionScript.guide_overdraw_enabled(),
+		"stage 4 disables guide overdraw"
+	)
+	var stage_four_route: PackedVector3Array = StageFourDefinitionScript.route()
+	var stage_four_length: float = 0.0
+	for index in range(1, stage_four_route.size()):
+		stage_four_length += stage_four_route[index - 1].distance_to(stage_four_route[index])
+	_assert_true(stage_four_length > 4250.0, "stage 4 route contains its final panel band")
+
+	var stage_five_hazards: Array[Dictionary] = StageFiveDefinitionScript.hazards()
+	var stage_five_fronts: Array[Dictionary] = StageFiveDefinitionScript.storm_fronts()
+	_assert_eq(stage_five_hazards.size(), 26, "stage 5 has its authored enemy pressure")
+	_assert_eq(stage_five_hazards[0], _hazard(1280.0, 7, "flipper"), "stage 5 first enemy")
+	_assert_eq(stage_five_hazards[-1], _hazard(4700.0, 14, "pulsar"), "stage 5 final enemy")
+	_assert_eq(stage_five_fronts.size(), 11, "stage 5 has its authored storm fronts")
+	_assert_eq(
+		stage_five_fronts[0],
+		{
+			"distance": 760.0,
+			"opening_lanes": 5,
+			"phase_lane": 0.0,
+			"lanes_per_second": 0.18,
+		},
+		"stage 5 first storm front"
+	)
+	_assert_eq(
+		StageFiveDefinitionScript.pickups(),
+		[_pickup(2670.0, 6, "purge"), _pickup(3150.0, 8, "life")],
+		"stage 5 pickups"
+	)
+	_assert_true(StageFiveDefinitionScript.gate_pairs().is_empty(), "stage 5 does not reuse gates")
+	_assert_true(
+		StageFiveDefinitionScript.environmental_hazards().is_empty(),
+		"stage 5 does not reuse reactor panels"
+	)
+	var stage_five_route: PackedVector3Array = StageFiveDefinitionScript.route()
+	var stage_five_length: float = _polyline_length(stage_five_route)
+	_assert_true(stage_five_length > 4850.0, "stage 5 route contains its final storm front")
+	_assert_true(
+		_minimum_curvature_radius(stage_five_route) > 24.0,
+		"stage 5 vortex remains wider than the tube"
 	)
 
 func _test_rim_obstacle_rules() -> void:
@@ -337,6 +440,68 @@ func _test_pickup_runtime() -> void:
 	_assert_true(pickup.cleared, "clears pickup")
 	runtime.clear()
 	_assert_eq(runtime.count(), 0, "clears all pickups")
+
+func _test_environment_runtime() -> void:
+	_assert_float_eq(
+		StageEnvironmentRuntimeScript.spawn_distance_for(720.0, 520.0),
+		200.0,
+		"reactor panel spawn distance uses reveal distance"
+	)
+	_assert_eq(
+		StageEnvironmentRuntimeScript.pulse_state_for(0.1, 0.0, 2.4, 0.8, 0.55),
+		StageEnvironmentRuntimeScript.PulseState.ACTIVE,
+		"reactor panel starts active"
+	)
+	_assert_eq(
+		StageEnvironmentRuntimeScript.pulse_state_for(1.0, 0.0, 2.4, 0.8, 0.55),
+		StageEnvironmentRuntimeScript.PulseState.INACTIVE,
+		"reactor panel has a safe interval"
+	)
+	_assert_eq(
+		StageEnvironmentRuntimeScript.pulse_state_for(2.0, 0.0, 2.4, 0.8, 0.55),
+		StageEnvironmentRuntimeScript.PulseState.WARNING,
+		"reactor panel warns before activation"
+	)
+
+	var runtime: StageEnvironmentRuntime = StageEnvironmentRuntimeScript.new()
+	runtime.setup(16, 4.2, 520.0, 2.4, 0.8, 0.55)
+	var panel: StageEnvironmentRuntime.ReactorPanel = runtime.add_panel(720.0, -1, 0.0)
+	_assert_eq(panel.lane, 15, "reactor panel lane wraps")
+	_assert_true(runtime.should_activate(panel, 200.0), "reactor panel activates at reveal")
+	panel.spawned = true
+	_assert_true(runtime.should_show(panel, 200.0), "reactor panel shows at reveal boundary")
+	_assert_eq(runtime.active_pressure(200.0), 1, "visible panels add normalized music pressure")
+	_assert_true(runtime.can_damage(panel, 720.0, 15, 0.1), "active panel damages matching lane")
+	_assert_true(not runtime.can_damage(panel, 720.0, 14, 0.1), "panel ignores another lane")
+	runtime.mark_hit(panel)
+	_assert_true(not runtime.can_damage(panel, 720.0, 15, 0.1), "panel damages once per crossing")
+	_assert_true(runtime.has_passed_player(panel, 725.0), "panel clears after passing player")
+
+func _test_storm_front_runtime() -> void:
+	_assert_float_eq(
+		StageStormFrontRuntimeScript.opening_center_for(2.0, 15.5, 0.5, 16),
+		0.5,
+		"storm front opening wraps around the lane ring"
+	)
+	_assert_true(
+		StageStormFrontRuntimeScript.lane_is_safe(15, 0.0, 5, 16),
+		"storm front opening is safe across lane zero"
+	)
+	_assert_true(
+		not StageStormFrontRuntimeScript.lane_is_safe(3, 0.0, 5, 16),
+		"storm front blocks lanes outside its opening"
+	)
+	var runtime: StageStormFrontRuntime = StageStormFrontRuntimeScript.new()
+	runtime.setup(16, 4.2, 620.0)
+	var front: StageStormFrontRuntime.StormFront = runtime.add_front(760.0, 5, 0.0, 0.25)
+	_assert_true(runtime.should_activate(front, 140.0), "storm front activates at reveal")
+	front.spawned = true
+	_assert_eq(runtime.active_pressure(140.0), 1, "visible storm front adds music pressure")
+	_assert_true(not runtime.can_damage(front, 760.0, 0, 0.0), "opening lane avoids damage")
+	_assert_true(runtime.can_damage(front, 760.0, 8, 0.0), "blocked lane takes damage")
+	runtime.mark_hit(front)
+	_assert_true(not runtime.can_damage(front, 760.0, 8, 0.0), "storm front damages once")
+	_assert_true(runtime.has_passed_player(front, 765.0), "storm front clears after crossing")
 
 func _test_projectile_runtime() -> void:
 	var runtime: StageProjectileRuntime = StageProjectileRuntimeScript.new()
@@ -451,7 +616,9 @@ func _test_stage_flow_runtime() -> void:
 	var flow: StageFlowRuntime = StageFlowRuntimeScript.new()
 
 	flow.start_stage(5)
-	_assert_eq(flow.stage, 3, "start_stage clamps to the max stage")
+	_assert_eq(flow.stage, 5, "start_stage accepts the final stage")
+	flow.start_stage(99)
+	_assert_eq(flow.stage, 5, "start_stage clamps to the max stage")
 	_assert_true(flow.run_active, "start_stage activates the run")
 	_assert_true(not flow.game_over, "start_stage clears game over")
 	_assert_true(not flow.game_complete, "start_stage clears game complete")
@@ -553,6 +720,30 @@ func _count_meshes(node: Node) -> int:
 	for child in node.get_children():
 		count += _count_meshes(child)
 	return count
+
+func _polyline_length(points: PackedVector3Array) -> float:
+	var length: float = 0.0
+	for index in range(1, points.size()):
+		length += points[index - 1].distance_to(points[index])
+	return length
+
+func _minimum_curvature_radius(points: PackedVector3Array) -> float:
+	var minimum_radius: float = INF
+	for index in range(1, points.size() - 1):
+		var first: Vector3 = points[index - 1]
+		var middle: Vector3 = points[index]
+		var last: Vector3 = points[index + 1]
+		var cross_length: float = (middle - first).cross(last - first).length()
+		if cross_length < 0.0001:
+			continue
+		var radius: float = (
+			first.distance_to(middle)
+			* middle.distance_to(last)
+			* last.distance_to(first)
+			/ (2.0 * cross_length)
+		)
+		minimum_radius = minf(minimum_radius, radius)
+	return minimum_radius
 
 func _first_material(node: Node) -> StandardMaterial3D:
 	if node is MeshInstance3D:

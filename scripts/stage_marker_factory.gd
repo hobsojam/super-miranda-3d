@@ -235,6 +235,135 @@ static func build_burst_marker() -> Node3D:
 		burst.add_child(shard)
 	return burst
 
+static func build_reactor_panel_marker() -> Node3D:
+	var marker: Node3D = Node3D.new()
+	var inactive: Node3D = Node3D.new()
+	inactive.name = "Inactive"
+	marker.add_child(inactive)
+	_add_box_part(
+		inactive,
+		Vector3(3.35, 0.16, 9.0),
+		Vector3.ZERO,
+		Vector3.ZERO,
+		reactor_panel_material(0)
+	)
+	_add_box_part(
+		inactive,
+		Vector3(2.75, 0.04, 7.8),
+		Vector3(0.0, -0.1, 0.0),
+		Vector3.ZERO,
+		reactor_panel_accent_material(0)
+	)
+
+	var warning: Node3D = Node3D.new()
+	warning.name = "Warning"
+	warning.visible = false
+	marker.add_child(warning)
+	_add_box_part(
+		warning,
+		Vector3(3.45, 0.2, 9.1),
+		Vector3.ZERO,
+		Vector3.ZERO,
+		reactor_panel_material(1)
+	)
+	for offset in [-2.8, 0.0, 2.8]:
+		_add_box_part(
+			warning,
+			Vector3(2.9, 0.06, 0.42),
+			Vector3(0.0, -0.14, offset),
+			Vector3.ZERO,
+			reactor_panel_accent_material(1)
+		)
+
+	var active: Node3D = Node3D.new()
+	active.name = "Active"
+	active.visible = false
+	marker.add_child(active)
+	_add_box_part(
+		active,
+		Vector3(3.5, 0.24, 9.2),
+		Vector3.ZERO,
+		Vector3.ZERO,
+		reactor_panel_material(2)
+	)
+	_add_box_part(
+		active,
+		Vector3(2.7, 0.08, 8.4),
+		Vector3(0.0, -0.17, 0.0),
+		Vector3.ZERO,
+		reactor_panel_accent_material(2)
+	)
+	return marker
+
+static func set_reactor_panel_state(marker: Node3D, state: int, pulse: float) -> void:
+	var inactive: Node3D = marker.get_node_or_null("Inactive") as Node3D
+	var warning: Node3D = marker.get_node_or_null("Warning") as Node3D
+	var active: Node3D = marker.get_node_or_null("Active") as Node3D
+	if inactive:
+		inactive.visible = state == 0
+	if warning:
+		warning.visible = state == 1
+		warning.scale = Vector3.ONE * (0.96 + pulse * 0.08)
+	if active:
+		active.visible = state == 2
+		active.scale = Vector3(1.0, 1.0 + pulse * 0.12, 1.0)
+
+static func build_storm_front_marker(
+	radius: float,
+	lane_count: int,
+	opening_lanes: int
+) -> Node3D:
+	var marker: Node3D = Node3D.new()
+	var lane_step: float = TAU / float(lane_count)
+	var arc_width: float = radius * lane_step * 0.82
+	var half_opening: int = floori(float(maxi(opening_lanes, 1)) * 0.5)
+	for lane in lane_count:
+		var wrapped_distance: int = mini(lane, lane_count - lane)
+		if wrapped_distance <= half_opening:
+			continue
+		var angle: float = lane_step * float(lane)
+		var radial_position: Vector3 = Vector3(cos(angle), sin(angle), 0.0) * radius * 0.96
+		_add_box_part(
+			marker,
+			Vector3(0.44, arc_width, 1.55),
+			radial_position,
+			Vector3(0.0, 0.0, angle),
+			storm_front_material()
+		)
+		_add_box_part(
+			marker,
+			Vector3(0.16, arc_width * 0.68, 2.05),
+			radial_position * 0.985,
+			Vector3(0.0, 0.0, angle),
+			storm_front_accent_material()
+		)
+	var beacon_angle: float = (float(half_opening) + 0.65) * lane_step
+	for direction in [-1.0, 1.0]:
+		var angle: float = beacon_angle * direction
+		_add_sphere_part(
+			marker,
+			0.52,
+			Vector3(cos(angle), sin(angle), 0.0) * radius * 0.93,
+			storm_front_beacon_material()
+		)
+	return marker
+
+static func set_storm_front_pose(
+	marker: Node3D,
+	route_basis: Basis,
+	angle: float,
+	pulse: float
+) -> void:
+	var scale_factor: float = 0.98 + pulse * 0.04
+	var roll_basis: Basis = Basis(Vector3(0.0, 0.0, 1.0), angle)
+	var composed_basis: Basis = (route_basis * roll_basis).scaled(
+		Vector3(scale_factor, scale_factor, 1.0)
+	)
+	if marker.is_inside_tree():
+		marker.global_basis = composed_basis
+	else:
+		marker.basis = composed_basis
+
 static func animate_enemy_art(marker: Node3D, kind: String) -> void:
 	var time: float = float(Time.get_ticks_msec()) * 0.001
 	match kind:
@@ -342,6 +471,67 @@ static func enemy_bolt_material() -> StandardMaterial3D:
 
 static func burst_material() -> StandardMaterial3D:
 	return _unshaded_material(Color(0.15, 1.0, 1.0), Color(0.0, 0.95, 1.0), 3.8)
+
+static func reactor_panel_material(state: int) -> StandardMaterial3D:
+	match state:
+		1:
+			return _unshaded_material(
+				Color(0.30, 0.48, 0.08),
+				Color(0.42, 1.0, 0.05),
+				3.4
+			)
+		2:
+			return _unshaded_material(
+				Color(0.86, 0.06, 0.46),
+				Color(1.0, 0.03, 0.34),
+				5.2
+			)
+	return _unshaded_material(
+		Color(0.025, 0.035, 0.045),
+		Color(0.02, 0.12, 0.10),
+		0.7
+	)
+
+static func reactor_panel_accent_material(state: int) -> StandardMaterial3D:
+	match state:
+		1:
+			return _unshaded_material(
+				Color(0.78, 1.0, 0.22),
+				Color(0.62, 1.0, 0.02),
+				4.6
+			)
+		2:
+			return _unshaded_material(
+				Color(1.0, 0.94, 0.98),
+				Color(1.0, 0.45, 0.84),
+				6.4
+			)
+	return _unshaded_material(
+		Color(0.08, 0.25, 0.22),
+		Color(0.02, 0.28, 0.20),
+		1.2
+	)
+
+static func storm_front_material() -> StandardMaterial3D:
+	return _unshaded_material(
+		Color(0.04, 0.34, 0.48),
+		Color(0.0, 0.72, 1.0),
+		4.2
+	)
+
+static func storm_front_accent_material() -> StandardMaterial3D:
+	return _unshaded_material(
+		Color(0.72, 0.96, 1.0),
+		Color(0.18, 0.92, 1.0),
+		6.0
+	)
+
+static func storm_front_beacon_material() -> StandardMaterial3D:
+	return _unshaded_material(
+		Color(1.0, 0.88, 0.16),
+		Color(1.0, 0.52, 0.02),
+		5.6
+	)
 
 static func _add_box_part(
 	parent: Node3D,

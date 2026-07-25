@@ -49,8 +49,8 @@ function kick(age) {
   const phase = TAU * (49 * age + 3.5 * (1 - Math.exp(-28 * age)));
   const body = Math.sin(phase) * Math.exp(-age * 9);
   const knock = Math.sin(TAU * 118 * age) * Math.exp(-age * 28);
-  const click = highNoise(Math.floor(age * SAMPLE_RATE), 3) * Math.exp(-age * 95);
-  return body * 0.82 + knock * 0.18 + click * 0.045;
+  const click = highNoise(Math.floor(age * SAMPLE_RATE), 3) * Math.exp(-age * 110);
+  return body * 0.82 + knock * 0.2 + click * 0.12;
 }
 
 function hat(age, index, open = false) {
@@ -59,7 +59,7 @@ function hat(age, index, open = false) {
     return 0;
   }
   const decay = open ? 18 : 62;
-  return highNoise(index, open ? 7 : 5) * Math.exp(-age * decay) * (open ? 0.13 : 0.1);
+  return highNoise(index, open ? 7 : 5) * Math.exp(-age * decay) * (open ? 0.18 : 0.15);
 }
 
 function snare(age, index) {
@@ -184,14 +184,20 @@ function sparseDrumsSample(time, index) {
   const beat = time / BEAT;
   const output = [0, 0];
   const kickAge = fract(beat) * BEAT;
-  const kickTone = kick(kickAge) * 0.46;
+  const kickTone = kick(kickAge) * 0.58;
   output[0] += kickTone;
   output[1] += kickTone;
 
   const eighth = Math.floor(beat * 2);
   const eighthAge = fract(beat * 2) * BEAT * 0.5;
   if (eighth % 2 === 1) {
-    add(output, pan(hat(eighthAge, index, true) * 0.75, 0.25));
+    add(output, pan(hat(eighthAge, index, true) * 0.9, 0.25));
+  }
+
+  const wholeBeat = Math.floor(beat);
+  const beatAge = fract(beat) * BEAT;
+  if (wholeBeat % 4 === 1 || wholeBeat % 4 === 3) {
+    add(output, pan(snare(beatAge, index) * 0.72, -0.06));
   }
 
   const barBeat = beat % 4;
@@ -384,17 +390,17 @@ const baseB = fadeEdges(
 const drumsHighA = fadeEdges(
   applyGain(
     normalize(render((time, index) => highDrumsSample(time, index, "a")), 0.84),
-    -2.3,
+    -2.6,
   ),
 );
 const drumsHighB = fadeEdges(
   applyGain(
     normalize(render((time, index) => highDrumsSample(time, index, "b")), 0.84),
-    -2.3,
+    -2.6,
   ),
 );
 const drumsSparse = fadeEdges(
-  applyGain(normalize(render(sparseDrumsSample), 0.78), -6),
+  applyGain(normalize(render(sparseDrumsSample), 0.78), -4.0),
 );
 
 writeStereoWav("audio/music/stage3_base_a.wav", baseA);

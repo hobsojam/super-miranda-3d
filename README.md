@@ -10,9 +10,11 @@ Missed enemies do not just vanish. They can reach the rim and become obstacles i
 
 ## Current Version
 
-The current build has three playable stages, each with its own route, enemy pattern, and music.
+The current build has five playable stages, each with its own route, enemy pattern, and music.
 Stage 1 keeps the bright guide-line Storm look, Stage 2 strips that back into a darker
-corkscrew, and Stage 3 closes with a downhill slalom.
+corkscrew, Stage 3 descends through a downhill slalom, and Stage 4 climbs a
+reactor grid whose floor panels pulse between safe and dangerous states.
+Stage 5 dives into a tightening vortex crossed by rotating storm fronts.
 
 Enemies each have their own job:
 
@@ -28,6 +30,13 @@ Pickups make firing less automatic:
 - **Life** gives you another chance if it reaches you.
 - **Purge** clears anchored rim obstacles.
 - Shooting a pickup destroys it, so sweeping every lane with fire is not always the best play.
+
+Stage 4's reactor panels are environmental hazards: they cannot be shot and
+never become rim obstacles. Their warning pulse gives you time to move before
+an active panel can damage you.
+
+Stage 5's storm fronts are rotating barriers with a bright opening. Track that
+opening as it moves around the tube and meet the front in one of its safe lanes.
 
 There is also a start screen, pause menu, game-over flow, stage-clear flow, test stage selection, damage flash, camera shake, short invulnerability after taking a hit, and a fullscreen toggle.
 
