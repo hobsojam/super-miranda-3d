@@ -2,7 +2,7 @@ class_name StormStage
 extends Node
 
 const STAGE_TRANSITION_TIME := 1.85
-const FINAL_STAGE := 3
+const FINAL_STAGE := 5
 
 @export var storm_path: NodePath
 @export var runner_path: NodePath
@@ -25,6 +25,9 @@ const FINAL_STAGE := 3
 @export var pulsar_bolt_speed: float = 95.0
 @export var exploder_fuse_time: float = 0.7
 @export var damage_invulnerability_time: float = 0.85
+@export var reactor_pulse_period: float = 2.4
+@export var reactor_active_duration: float = 0.8
+@export var reactor_warning_duration: float = 0.55
 
 var _storm: StormTube
 var _runner: Node
@@ -35,11 +38,15 @@ var _audio: StageAudio
 var _rim_obstacles: RimObstacleManager
 var _hazards: StageHazardRuntime
 var _pickups: StagePickupRuntime
+var _environment: StageEnvironmentRuntime
+var _storm_fronts: StageStormFrontRuntime
 var _projectiles: StageProjectileRuntime
 var _enemy_skills: EnemySkillRuntime
 var _flow: StageFlowRuntime
 var _active_markers: Dictionary = {}
 var _pickup_markers: Dictionary = {}
+var _environment_markers: Dictionary = {}
+var _storm_front_markers: Dictionary = {}
 var _score: int = 0
 var _damage_invulnerability_timer: float = 0.0
 
@@ -54,6 +61,8 @@ func _ready() -> void:
 	_setup_hud()
 	_setup_hazards()
 	_setup_pickups()
+	_setup_environment()
+	_setup_storm_fronts()
 	_setup_projectiles()
 	_setup_enemy_skills()
 	_setup_rim_obstacles()
@@ -99,6 +108,8 @@ func _process(delta: float) -> void:
 
 	_update_hazards(delta)
 	_update_pickups(player_distance, player_lane)
+	_update_environment_panels(player_distance, player_lane)
+	_update_storm_fronts(player_distance, player_lane)
 	_update_bullets(delta)
 	_update_enemy_bolts(delta, player_distance, player_lane)
 	_update_rim_obstacles(delta, player_lane)
@@ -172,6 +183,8 @@ func _on_player_fire_requested() -> void:
 func _build_stage_for(stage: int) -> void:
 	_hazards.clear()
 	_pickups.clear()
+	_environment.clear()
+	_storm_fronts.clear()
 	var definition: Dictionary = _stage_definition(stage)
 	for entry in definition["hazards"]:
 		_add_stage_hazard(entry["distance"], entry["lane"], entry["kind"])
@@ -184,27 +197,66 @@ func _build_stage_for(stage: int) -> void:
 		)
 	for pickup in definition["pickups"]:
 		_add_pickup(pickup["distance"], pickup["lane"], pickup["kind"])
+	for panel in definition["environmental_hazards"]:
+		_environment.add_panel(
+			panel["distance"],
+			panel["lane"],
+			panel["phase_offset"]
+		)
+	for front in definition["storm_fronts"]:
+		_storm_fronts.add_front(
+			front["distance"],
+			front["opening_lanes"],
+			front["phase_lane"],
+			front["lanes_per_second"]
+		)
 
 func _stage_definition(stage: int) -> Dictionary:
+	if stage == 5:
+		return {
+			"hazards": StageFiveDefinition.hazards(),
+			"pickups": StageFiveDefinition.pickups(),
+			"gate_pairs": StageFiveDefinition.gate_pairs(),
+			"environmental_hazards": StageFiveDefinition.environmental_hazards(),
+			"storm_fronts": StageFiveDefinition.storm_fronts(),
+		}
+	if stage == 4:
+		return {
+			"hazards": StageFourDefinition.hazards(),
+			"pickups": StageFourDefinition.pickups(),
+			"gate_pairs": StageFourDefinition.gate_pairs(),
+			"environmental_hazards": StageFourDefinition.environmental_hazards(),
+			"storm_fronts": [],
+		}
 	if stage == 3:
 		return {
 			"hazards": StageThreeDefinition.hazards(),
 			"pickups": StageThreeDefinition.pickups(),
 			"gate_pairs": StageThreeDefinition.gate_pairs(),
+			"environmental_hazards": [],
+			"storm_fronts": [],
 		}
 	if stage == 2:
 		return {
 			"hazards": StageTwoDefinition.hazards(),
 			"pickups": StageTwoDefinition.pickups(),
 			"gate_pairs": StageTwoDefinition.gate_pairs(),
+			"environmental_hazards": [],
+			"storm_fronts": [],
 		}
 	return {
 		"hazards": StageOneDefinition.hazards(),
 		"pickups": StageOneDefinition.pickups(),
 		"gate_pairs": StageOneDefinition.gate_pairs(),
+		"environmental_hazards": [],
+		"storm_fronts": [],
 	}
 
 func _stage_guide_overdraw_enabled(stage: int) -> bool:
+	if stage == 5:
+		return StageFiveDefinition.guide_overdraw_enabled()
+	if stage == 4:
+		return StageFourDefinition.guide_overdraw_enabled()
 	if stage == 3:
 		return StageThreeDefinition.guide_overdraw_enabled()
 	if stage == 2:
@@ -212,6 +264,10 @@ func _stage_guide_overdraw_enabled(stage: int) -> bool:
 	return StageOneDefinition.guide_overdraw_enabled()
 
 func _stage_route(stage: int) -> PackedVector3Array:
+	if stage == 5:
+		return StageFiveDefinition.route()
+	if stage == 4:
+		return StageFourDefinition.route()
 	if stage == 3:
 		return StageThreeDefinition.route()
 	if stage == 2:
@@ -219,6 +275,10 @@ func _stage_route(stage: int) -> PackedVector3Array:
 	return StageOneDefinition.route()
 
 func _stage_ring_samples(stage: int) -> int:
+	if stage == 5:
+		return StageFiveDefinition.ring_samples()
+	if stage == 4:
+		return StageFourDefinition.ring_samples()
 	if stage == 3:
 		return StageThreeDefinition.ring_samples()
 	if stage == 2:
@@ -320,6 +380,20 @@ func _setup_pickups() -> void:
 	_pickups = StagePickupRuntime.new()
 	_pickups.setup(_storm.lane_count, hit_window, hazard_reveal_distance)
 
+func _setup_environment() -> void:
+	_environment = StageEnvironmentRuntime.new()
+	_environment.setup(
+		_storm.lane_count,
+		hit_window,
+		hazard_reveal_distance,
+		reactor_pulse_period,
+		reactor_active_duration,
+		reactor_warning_duration
+	)
+
+func _setup_storm_fronts() -> void:
+	_storm_fronts = StageStormFrontRuntime.new()
+	_storm_fronts.setup(_storm.lane_count, hit_window, 620.0)
 func _setup_projectiles() -> void:
 	_projectiles = StageProjectileRuntime.new()
 	_projectiles.setup(bullet_speed, bullet_range, pulsar_bolt_speed, hit_window)
@@ -360,12 +434,18 @@ func _advance_stage() -> void:
 	var next_stage: int = completed_stage + 1
 	_clear_markers()
 	_clear_pickup_markers()
+	_clear_environment_markers()
+	_clear_storm_front_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_burst_rim_obstacles()
 	_clear_rim_obstacles()
 	for hazard in _hazards.all():
 		hazard.cleared = true
+	for panel in _environment.all():
+		panel.cleared = true
+	for front in _storm_fronts.all():
+		front.cleared = true
 	if next_stage <= FINAL_STAGE:
 		_flow.begin_stage_clear_transition(next_stage, STAGE_TRANSITION_TIME)
 		_score += _flow.last_stage_time_bonus
@@ -407,6 +487,8 @@ func _continue_to_pending_stage() -> void:
 func _clear_active_state() -> void:
 	_clear_markers()
 	_clear_pickup_markers()
+	_clear_environment_markers()
+	_clear_storm_front_markers()
 	_clear_bullets()
 	_clear_enemy_bolts()
 	_clear_rim_obstacles()
@@ -494,6 +576,138 @@ func _clear_pickup_markers() -> void:
 		(marker as Node3D).queue_free()
 	_pickup_markers.clear()
 
+func _update_environment_panels(player_distance: float, player_lane: int) -> void:
+	for panel in _environment.all():
+		if panel.cleared:
+			continue
+		if not panel.spawned:
+			if _environment.should_activate(panel, player_distance):
+				panel.spawned = true
+				_ensure_environment_marker(panel)
+			else:
+				continue
+		if _environment.has_passed_player(panel, player_distance):
+			_remove_environment_marker(panel)
+			_environment.clear_panel(panel)
+			continue
+		if _environment.should_show(panel, player_distance):
+			_ensure_environment_marker(panel)
+			_update_environment_marker(panel)
+		if _environment.can_damage(
+			panel,
+			player_distance,
+			player_lane,
+			_flow.stage_elapsed_time
+		) and _can_damage_player():
+			_environment.mark_hit(panel)
+			var marker: Node3D = _environment_markers.get(panel) as Node3D
+			if marker:
+				_spawn_burst(marker.global_position)
+			_damage_player(StageAudio.REACTOR_SOUND)
+
+func _ensure_environment_marker(panel: StageEnvironmentRuntime.ReactorPanel) -> void:
+	if _environment_markers.has(panel):
+		return
+	var marker: Node3D = StageMarkerFactory.build_reactor_panel_marker()
+	_storm.add_child(marker)
+	_environment_markers[panel] = marker
+
+func _update_environment_marker(panel: StageEnvironmentRuntime.ReactorPanel) -> void:
+	var marker: Node3D = _environment_markers.get(panel) as Node3D
+	if marker == null:
+		return
+	var sample: StormTube.RouteSample = _storm.sample_at_distance(panel.distance)
+	var lane_angle: float = _runner.lane_angle_for_index(panel.lane)
+	var radial: Vector3 = sample.right * cos(lane_angle) + sample.up * sin(lane_angle)
+	var forward: Vector3 = sample.tangent.normalized()
+	var side: Vector3 = radial.cross(forward).normalized()
+	marker.global_position = sample.position + radial * (_storm.radius * 0.97)
+	marker.global_basis = Basis(side, radial, -forward).orthonormalized()
+	var state: StageEnvironmentRuntime.PulseState = _environment.pulse_state(
+		panel,
+		_flow.stage_elapsed_time
+	)
+	var pulse: float = 0.5 + 0.5 * sin(
+		_flow.stage_elapsed_time * 10.0 + panel.phase_offset * 3.0
+	)
+	StageMarkerFactory.set_reactor_panel_state(marker, state, pulse)
+
+func _remove_environment_marker(panel: StageEnvironmentRuntime.ReactorPanel) -> void:
+	if not _environment_markers.has(panel):
+		return
+	var marker: Node3D = _environment_markers[panel] as Node3D
+	_environment_markers.erase(panel)
+	marker.queue_free()
+
+func _clear_environment_markers() -> void:
+	for marker in _environment_markers.values():
+		(marker as Node3D).queue_free()
+	_environment_markers.clear()
+
+func _update_storm_fronts(player_distance: float, player_lane: int) -> void:
+	for front in _storm_fronts.all():
+		if front.cleared:
+			continue
+		if not front.spawned:
+			if _storm_fronts.should_activate(front, player_distance):
+				front.spawned = true
+				_ensure_storm_front_marker(front)
+			else:
+				continue
+		if _storm_fronts.has_passed_player(front, player_distance):
+			_remove_storm_front_marker(front)
+			_storm_fronts.clear_front(front)
+			continue
+		if _storm_fronts.should_show(front, player_distance):
+			_ensure_storm_front_marker(front)
+			_update_storm_front_marker(front)
+		if _storm_fronts.can_damage(
+			front,
+			player_distance,
+			player_lane,
+			_flow.stage_elapsed_time
+		) and _can_damage_player():
+			_storm_fronts.mark_hit(front)
+			var marker: Node3D = _storm_front_markers.get(front) as Node3D
+			if marker:
+				_spawn_burst(marker.global_position)
+			_damage_player(StageAudio.STORM_FRONT_SOUND)
+func _ensure_storm_front_marker(front: StageStormFrontRuntime.StormFront) -> void:
+	if _storm_front_markers.has(front):
+		return
+	var marker: Node3D = StageMarkerFactory.build_storm_front_marker(
+		_storm.radius,
+		_storm.lane_count,
+		front.opening_lanes
+	)
+	_storm.add_child(marker)
+	_storm_front_markers[front] = marker
+func _update_storm_front_marker(front: StageStormFrontRuntime.StormFront) -> void:
+	var marker: Node3D = _storm_front_markers.get(front) as Node3D
+	if marker == null:
+		return
+	var sample: StormTube.RouteSample = _storm.sample_at_distance(front.distance)
+	var forward: Vector3 = sample.tangent.normalized()
+	marker.global_position = sample.position
+	var route_basis: Basis = Basis(sample.right, sample.up, -forward).orthonormalized()
+	var center_lane: float = _storm_fronts.opening_center(
+		front,
+		_flow.stage_elapsed_time
+	)
+	var lane_zero_angle: float = _runner.lane_angle_for_index(0)
+	var rotation_angle: float = lane_zero_angle + TAU * center_lane / float(_storm.lane_count)
+	var pulse: float = 0.5 + 0.5 * sin(_flow.stage_elapsed_time * 7.0)
+	StageMarkerFactory.set_storm_front_pose(marker, route_basis, rotation_angle, pulse)
+func _remove_storm_front_marker(front: StageStormFrontRuntime.StormFront) -> void:
+	if not _storm_front_markers.has(front):
+		return
+	var marker: Node3D = _storm_front_markers[front] as Node3D
+	_storm_front_markers.erase(front)
+	marker.queue_free()
+func _clear_storm_front_markers() -> void:
+	for marker in _storm_front_markers.values():
+		(marker as Node3D).queue_free()
+	_storm_front_markers.clear()
 func _collect_pickup(pickup: StagePickupRuntime.Pickup) -> void:
 	_pickups.clear_pickup(pickup)
 	var collect_position: Vector3 = (
@@ -752,6 +966,8 @@ func _setup_audio() -> void:
 func _update_music_intensity(delta: float) -> void:
 	var active_pressure: int = _rim_obstacles.count()
 	active_pressure += _hazards.active_pressure(_runner.distance())
+	active_pressure += _environment.active_pressure(_runner.distance())
+	active_pressure += _storm_fronts.active_pressure(_runner.distance())
 	_audio.update_music_intensity(
 		delta,
 		active_pressure,

@@ -109,9 +109,36 @@ letter of phase 5, but it needed one to actually feel like a finish line.
 See `scripts/stage_one_definition.gd` and `BACKLOG.md` for any remaining
 open stage-content decisions.
 
+## Applied example (Stage 4)
+
+Stage 4 uses the tube itself as the new idea. Fixed reactor panels pulse
+through inactive, warning, and active states; active panels damage the player
+on contact, cannot be shot, and never become rim obstacles. The route stays
+comparatively straight so the player can read lane safety well ahead.
+
+The first two panel bands appear without enemies. Phase 3 combines
+complementary and alternating panel patterns with familiar enemy kinds. Phase 4
+powers the reactor down around a life pickup. Phase 5 restores the panels at
+their highest density and closes on a twelve-panel band with a four-lane safe
+corridor, using the terrain pattern itself as the capstone instead of another
+gate gauntlet.
+
+## Applied example (Stage 5)
+
+Stage 5 turns the route into a shrinking forward-axis vortex and introduces
+rotating storm fronts. Each front blocks most of the tube but carries a bright,
+continuously moving safe opening. The fronts cannot be shot and do not anchor;
+the player must predict where the opening will be at the moment of crossing.
+
+Phase 2 teaches two wide, slow openings without enemy interference. Phase 3
+alternates rotation direction while combining the fronts with known enemies,
+then introduces the first narrow opening. Phase 4 opens into a long quiet eye
+with a life pickup. Phase 5 tightens the route, narrows every later opening, and
+finishes on the fastest front at the core.
+
 ## Backlog: future stage shape ideas
 
-Ideas for stages beyond Stage 3, not yet built or scheduled. Route shape
+Ideas for stages beyond Stage 5, not yet built or scheduled. Route shape
 is the interesting design space here, not enemy content - phase pacing
 still applies to whichever shape gets picked, the same way it applied to
 Stage 2's corkscrew and Stage 3's weave.
