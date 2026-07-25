@@ -20,6 +20,12 @@ const MOVE_SOUND := preload("res://audio/sfx/player_move.wav")
 # steps one lane, independent of the keyboard's hold-repeat state machine -
 # both drive the same _step_lane, so neither interferes with the other.
 @export var mouse_lane_sensitivity: float = 18.0
+# Speed change per scroll wheel notch - a discrete nudge, not a ramp like
+# the up/down keys. Scrolling and holding up/down are different mechanics
+# (notch vs. hold-to-ramp), not the same control on two input devices, so
+# both are kept rather than treating one as a mouse replacement for the
+# other.
+@export var scroll_speed_step: float = 4.0
 
 var _storm: StormTube
 var _player: StormPlayer
@@ -68,8 +74,16 @@ func _process(delta: float) -> void:
 	_update_route_pose(delta)
 
 func _input(event: InputEvent) -> void:
-	if _input_enabled and event is InputEventMouseMotion:
+	if not _input_enabled:
+		return
+	if event is InputEventMouseMotion:
 		_mouse_delta_accum += event.relative.x
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_speed = minf(_speed + scroll_speed_step, max_speed)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_speed = maxf(_speed - scroll_speed_step, min_speed)
 
 func restart_run() -> void:
 	_distance = 0.0
