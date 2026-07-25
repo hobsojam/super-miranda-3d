@@ -214,9 +214,9 @@ static func hazards() -> Array[Dictionary]:
 	# the geometry no longer matches. The second one (was distance 780, lane
 	# 5) is moved to lane 13 - the opposite rail - because lane 5 sat on the
 	# blind/inner side of the bend there, impossible to see coming. The
-	# three from 3600 on are new: the switchback climb had zero hazards
-	# before, just empty travel, which was most of why the stage read as
-	# sparse.
+	# final nine form a rising-density switchback finale ahead of the gate
+	# gauntlet. The last pair still leaves a short readjustment window before
+	# the first gate collision.
 	return [
 		_hazard(640.0, 1, "flipper"),
 		_hazard(740.0, 13, "flipper"),
@@ -232,9 +232,15 @@ static func hazards() -> Array[Dictionary]:
 		_hazard(1810.0, 10, "exploder"),
 		_hazard(2030.0, 15, "flipper"),
 		_hazard(2250.0, 0, "splitter"),
+		_hazard(3320.0, 14, "pulsar"),
+		_hazard(3480.0, 5, "splitter"),
 		_hazard(3600.0, 3, "flipper"),
+		_hazard(3720.0, 9, "exploder"),
 		_hazard(3850.0, 12, "spiker"),
+		_hazard(3970.0, 1, "pulsar"),
 		_hazard(4100.0, 7, "flipper"),
+		_hazard(4210.0, 4, "splitter"),
+		_hazard(4210.0, 13, "exploder"),
 	]
 
 static func pickups() -> Array[Dictionary]:
