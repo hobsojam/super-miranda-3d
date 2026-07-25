@@ -81,6 +81,11 @@ func _set_paused(paused: bool) -> void:
 	_panel.visible = paused
 	if paused:
 		_sync_fullscreen_checkbox()
+	# _can_toggle_pause only allows pausing during active gameplay (never
+	# while a menu screen is showing), so unpausing always means returning
+	# to piloting - safe to unconditionally re-capture the mouse here
+	# rather than needing to ask StormRunner what state it's in.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if paused else Input.MOUSE_MODE_CAPTURED
 
 func _on_music_changed(value: float) -> void:
 	_apply_bus_volume("Music", value)

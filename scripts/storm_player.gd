@@ -27,7 +27,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_damage_flash_timer = maxf(_damage_flash_timer - delta, 0.0)
 	_invulnerable_visual_timer = maxf(_invulnerable_visual_timer - delta, 0.0)
-	tick_fire_input(delta, Input.is_key_pressed(KEY_SPACE))
+	var fire_held: bool = (
+		Input.is_key_pressed(KEY_SPACE)
+		or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	)
+	tick_fire_input(delta, fire_held)
 	_update_damage_visuals()
 
 func set_route_pose(sample: StormTube.RouteSample, lane_angle: float, tube_radius: float) -> void:
