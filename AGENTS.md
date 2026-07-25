@@ -58,7 +58,10 @@ touching anything under `scripts/`.
 CI builds this preset too, on every push and pull request, and uploads the
 `.exe` as a workflow artifact (`.github/workflows/ci.yml`'s `windows-build`
 job) — useful for playtesting a PR without a local export template setup.
-Automated GitHub Releases on version tags are still on `BACKLOG.md`.
+Pushing a `vMAJOR.MINOR.PATCH` tag runs `.github/workflows/release.yml`,
+which exports the build, zips it, and publishes a GitHub Release via
+`gh release create` — verified working against real tag pushes (v0.5.0,
+v0.6.0), not just YAML-validated.
 
 ## Versioning
 
