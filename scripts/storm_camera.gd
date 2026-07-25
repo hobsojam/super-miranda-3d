@@ -16,6 +16,10 @@ const MOVE_SOUND := preload("res://audio/sfx/player_move.wav")
 @export var start_lane_angle: float = -PI * 0.5
 @export var damage_shake_time: float = 0.18
 @export var damage_shake_strength: float = 0.42
+# Pixels of accumulated mouse motion (InputEventMouseMotion.relative.x) that
+# steps one lane, independent of the keyboard's hold-repeat state machine -
+# both drive the same _step_lane, so neither interferes with the other.
+@export var mouse_lane_sensitivity: float = 18.0
 
 var _storm: StormTube
 var _player: StormPlayer
@@ -27,6 +31,7 @@ var _speed: float
 var _held_lane_direction: int = 0
 var _hold_repeat_timer: float = 0.0
 var _input_enabled: bool = true
+var _mouse_delta_accum: float = 0.0
 var _move_audio: AudioStreamPlayer
 var _shake_timer: float = 0.0
 var _shake_duration: float = 0.0
@@ -62,15 +67,25 @@ func _process(delta: float) -> void:
 	_distance = min(_distance + _speed * delta, _storm.route_length)
 	_update_route_pose(delta)
 
+func _input(event: InputEvent) -> void:
+	if _input_enabled and event is InputEventMouseMotion:
+		_mouse_delta_accum += event.relative.x
+
 func restart_run() -> void:
 	_distance = 0.0
 	_lane_index = 0
 	_target_lane_angle = _lane_angle_for_index(_lane_index)
 	_lane_angle = _target_lane_angle
 	_shake_timer = 0.0
+	_mouse_delta_accum = 0.0
 
 func set_input_enabled(enabled: bool) -> void:
 	_input_enabled = enabled
+	# Captured while piloting (so mouse motion is relative-delta-only and
+	# never escapes the window), visible whenever gameplay input is off -
+	# every place that calls this is exactly a menu/pause/transition state
+	# where the HUD needs a normal clickable cursor instead.
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if enabled else Input.MOUSE_MODE_VISIBLE
 
 func play_damage_feedback(_invulnerable_time: float) -> void:
 	_shake_timer = damage_shake_time
@@ -110,7 +125,17 @@ func _update_route_pose(delta: float) -> void:
 		_shake_timer = maxf(_shake_timer - delta, 0.0)
 	look_at(_player.global_position.lerp(ahead.position, 0.35), here.up)
 
+func _consume_mouse_lane_input() -> void:
+	while _mouse_delta_accum >= mouse_lane_sensitivity:
+		_step_lane(1)
+		_mouse_delta_accum -= mouse_lane_sensitivity
+	while _mouse_delta_accum <= -mouse_lane_sensitivity:
+		_step_lane(-1)
+		_mouse_delta_accum += mouse_lane_sensitivity
+
 func _update_lane_input(delta: float) -> void:
+	_consume_mouse_lane_input()
+
 	var step_direction: int = 0
 	if Input.is_action_just_pressed("ui_left"):
 		step_direction = -1

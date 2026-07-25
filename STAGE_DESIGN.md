@@ -108,3 +108,60 @@ optional, not the definition" — Stage 1 didn't need one to satisfy the
 letter of phase 5, but it needed one to actually feel like a finish line.
 See `scripts/stage_one_definition.gd` and `BACKLOG.md` for any remaining
 open stage-content decisions.
+
+## Backlog: future stage shape ideas
+
+Ideas for stages beyond Stage 3, not yet built or scheduled. Route shape
+is the interesting design space here, not enemy content - phase pacing
+still applies to whichever shape gets picked, the same way it applied to
+Stage 2's corkscrew and Stage 3's weave.
+
+The real lesson from building Stage 2 and Stage 3 is that a shape idea
+and a *safe, working* shape are different amounts of effort. Both stages
+needed real bugs found and fixed after the first reasonable-looking
+attempt - direction reversals at segment seams, aliased-looking bends
+that were actually fine, and (Stage 3, most seriously) a hand-placed
+zigzag whose Catmull-Rom curvature at each vertex was tighter than the
+tube's own cross-section radius, which pinches the inside wall. See
+`scripts/stage_two_definition.gd` and `scripts/stage_three_definition.gd`
+for how that was fixed: build the shape as an explicit parametric formula
+(a real sine wave for Stage 3, a real helix for Stage 2's corkscrew),
+finely sampled and emitted by arc length, so curvature is a derivable,
+checkable property instead of an accident of how far apart hand-placed
+points happen to be - and actually check it (radius of curvature at the
+tightest point vs. `StormTube.radius`), not just render-sample turn angle,
+which only catches aliasing.
+
+Ideas buildable with that same technique (no engine changes, just a new
+`stage_N_definition.gd`):
+
+- **Braid / figure-eight** - two interleaved lateral oscillations at
+  different frequencies (a Lissajous-style curve) so the path visibly
+  crosses over itself, rather than just swinging side to side like
+  Stage 3.
+- **Ascending drill** - the corkscrew's exact math, but coiling around
+  the forward travel axis (a barrel roll) instead of a downward axis,
+  which Stage 2 deliberately avoided in favor of the "coiled snake" read.
+  Genuinely different screen feel now that the technique is understood.
+- **Vertical undulation ("dunes")** - Stage 3's sine-wave technique
+  applied to y instead of x: cresting and dipping rather than weaving
+  left-right.
+- **Tightening vortex** - corkscrew math with radius shrinking as a
+  function of distance, like being pulled into a drain. Reads well as a
+  finale set-piece.
+- **Wide sweeping canyon** - one or two big, low-frequency S-bends rather
+  than repeated oscillation - emphasizes scale over rhythm, a different
+  pacing character from Stage 3's constant weave.
+- **Combined diagonal weave** - x and y oscillating together without a
+  full rotation, a middle ground between Stage 3's weave and Stage 2's
+  corkscrew.
+
+Ideas that would need actual engine work first, not just a new stage-
+definition file:
+
+- **Widening/narrowing tube** - `StormTube.radius` is a single fixed
+  value today, not distance-varying. A "breathing" tube needs real
+  changes to `storm_tube.gd`'s mesh-building and lane-ring math, not just
+  new route data.
+- **Hazard density or behavior tied to tube radius** - depends on the
+  above existing first.
